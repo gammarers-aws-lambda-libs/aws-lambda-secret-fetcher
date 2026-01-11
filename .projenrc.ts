@@ -6,7 +6,7 @@ const project = new typescript.TypeScriptProject({
   repository: 'https://github.com/gammarers-aws-lambda-libs/aws-lambda-secret-fetcher.git',
   releaseToNpm: false,
   npmAccess: javascript.NpmAccess.PUBLIC,
-  minNodeVersion: '16.0.0',
+  minNodeVersion: '20.0.0',
   workflowNodeVersion: '24.x',
   autoApproveOptions: {
     secret: 'GITHUB_TOKEN',

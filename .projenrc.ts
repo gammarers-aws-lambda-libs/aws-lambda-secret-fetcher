@@ -8,6 +8,12 @@ const project = new typescript.TypeScriptProject({
   npmAccess: javascript.NpmAccess.PUBLIC,
   minNodeVersion: '20.0.0',
   workflowNodeVersion: '24.x',
+  depsUpgradeOptions: {
+    workflowOptions: {
+      labels: ['auto-approve', 'auto-merge'],
+      // schedule: javascript.UpgradeDependenciesSchedule.expressions(['2 16 * * 3']),
+    },
+  },
   autoApproveOptions: {
     secret: 'GITHUB_TOKEN',
     allowedUsernames: ['yicr'],

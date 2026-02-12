@@ -25,10 +25,10 @@ Your Lambda function must have the [AWS Parameters and Secrets Lambda Extension]
 ### Basic Usage
 
 ```typescript
-import { getSecretValue } from 'aws-lambda-secret-fetcher';
+import { secretFetcher } from 'aws-lambda-secret-fetcher';
 
 // Get a plain string secret
-const apiKey = await getSecretValue('my-api-key');
+const apiKey = await secretFetcher.getSecretValue('my-api-key');
 
 // Get a JSON secret with type inference
 interface DbCredentials {
@@ -37,25 +37,29 @@ interface DbCredentials {
   host: string;
 }
 
-const credentials = await getSecretValue<DbCredentials>('my-db-credentials');
+const credentials = await secretFetcher.getSecretValue<DbCredentials>('my-db-credentials');
 console.log(credentials.username); // Type-safe access
 ```
 
 ### With Options
 
 ```typescript
-import { getSecretValue } from 'aws-lambda-secret-fetcher';
+import { secretFetcher, type GetSecretValueOptions } from 'aws-lambda-secret-fetcher';
 
-const secret = await getSecretValue('my-secret', {
+const options: GetSecretValueOptions = {
   timeoutMs: 3000,    // Timeout per request (default: 2000)
   retries: 5,         // Number of retry attempts (default: 3)
   baseBackoffMs: 500, // Base backoff time for retries (default: 300)
-});
+};
+
+const secret = await secretFetcher.getSecretValue('my-secret', options);
 ```
 
 ## API
 
-### `getSecretValue<T>(name, options?)`
+The package exports `secretFetcher`, an object that provides:
+
+### `secretFetcher.getSecretValue<T>(name, options?)`
 
 Fetches a secret value from AWS Secrets Manager via the Lambda Extension.
 

@@ -33,7 +33,7 @@ interface SecretResponse {
  * @param options GetSecretValue Options
  * @returns SecretString as T
  */
-export async function getSecretValue<T = string>(name: string, options: GetSecretValueOptions = {}): Promise<T> {
+const getSecretValue = async <T = string>(name: string, options: GetSecretValueOptions = {}): Promise<T> => {
   // default options
   const { timeoutMs = 2000, retries = 3, baseBackoffMs = 300 } = options;
 
@@ -63,7 +63,7 @@ export async function getSecretValue<T = string>(name: string, options: GetSecre
   }
 
   return secretString as T;
-}
+};
 
 /**
  * retry + timeout + Full Jitter
@@ -71,7 +71,7 @@ export async function getSecretValue<T = string>(name: string, options: GetSecre
  * @param options - The options for the fetch
  * @returns The response
  */
-async function request(url: string, options: RequestOptions): Promise<Response> {
+const request = async (url: string, options: RequestOptions): Promise<Response> => {
   const { headers, retries, timeoutMs, baseBackoffMs } = options;
 
   for (let attempt = 1; attempt <= retries; attempt++) {
@@ -137,9 +137,9 @@ async function request(url: string, options: RequestOptions): Promise<Response> 
   }
 
   throw new Error('Unreachable'); // TS 用（実際には到達しない）
-}
+};
 
-function isSecretResponse(value: unknown): value is SecretResponse {
+const isSecretResponse = (value: unknown): value is SecretResponse => {
   if (typeof value !== 'object' || value === null) return false;
   const v = value as Record<string, unknown>;
 
@@ -147,16 +147,15 @@ function isSecretResponse(value: unknown): value is SecretResponse {
          typeof v.Name === 'string' &&
          typeof v.ARN === 'string' &&
          (v.VersionId === undefined || typeof v.VersionId === 'string');
-}
+};
 
 /**
  * Wait for a given time
  * @param ms - The time to wait in milliseconds
  * @returns A promise that resolves when the time has elapsed
  */
-function wait(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+const wait = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * AWS recommended Full Jitter
@@ -164,16 +163,21 @@ function wait(ms: number): Promise<void> {
  * @param attempt - The attempt number
  * @returns The time to wait in milliseconds
  */
-function fullJitter(base: number, attempt: number): number {
+const fullJitter = (base: number, attempt: number): number => {
   const cap = base * Math.pow(2, attempt);
   return Math.floor(Math.random() * cap);
-}
+};
 
 /**
  * Roughly JSON check
  * @param str - The string to check
  * @returns True if the string looks like JSON
  */
-function looksLikeJson(str: string): boolean {
+const looksLikeJson = (str: string): boolean => {
   return typeof str === 'string' && str.trim().startsWith('{');
-}
+};
+
+
+export const secretFetcher = {
+  getSecretValue,
+};

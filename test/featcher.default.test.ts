@@ -1,6 +1,6 @@
-import { getSecretValue } from '../src';
+import { secretFetcher } from '../src';
 
-describe('getSecretValue', () => {
+describe('secretFetcher.getSecretValueValue', () => {
   const mockFetch = jest.fn();
   const originalFetch = global.fetch;
 
@@ -23,7 +23,7 @@ describe('getSecretValue', () => {
       }),
     });
 
-    const result = await getSecretValue<{ username: string; password: string }>('test-secret');
+    const result = await secretFetcher.getSecretValue<{ username: string; password: string }>('test-secret');
     expect(result).toEqual({ username: 'admin', password: 'secret' });
   });
 
@@ -37,7 +37,7 @@ describe('getSecretValue', () => {
       }),
     });
 
-    const result = await getSecretValue('test-secret');
+    const result = await secretFetcher.getSecretValue('test-secret');
     expect(result).toBe('plain-secret-value');
   });
 
@@ -47,6 +47,6 @@ describe('getSecretValue', () => {
       json: async () => ({ invalid: 'response' }),
     });
 
-    await expect(getSecretValue('test-secret')).rejects.toThrow('Invalid secret response format');
+    await expect(secretFetcher.getSecretValue('test-secret')).rejects.toThrow('Invalid secret response format');
   });
 });

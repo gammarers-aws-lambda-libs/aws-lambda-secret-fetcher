@@ -2401,6 +2401,11 @@ fdir@^6.5.0:
   resolved "https://registry.yarnpkg.com/fdir/-/fdir-6.5.0.tgz#ed2ab967a331ade62f18d077dae192684d50d350"
   integrity sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg==
 
+fetch-retrier@^0.1:
+  version "0.1.4"
+  resolved "https://registry.yarnpkg.com/fetch-retrier/-/fetch-retrier-0.1.4.tgz#ddc3dfd3c440adc327d9f1bbdc5eaf62623b208e"
+  integrity sha512-wt3lO00y+crJ66f1GIzY5G2bU2hwdMCQ6htai06PtVWDf0P943I/jaL0AHh0H5ucvMN9Gxb2kMz90oPmIOPugQ==
+
 figures@^3.2.0:
   version "3.2.0"
   resolved "https://registry.yarnpkg.com/figures/-/figures-3.2.0.tgz#625c18bd293c604dc4a8ddb2febf0c88341746af"

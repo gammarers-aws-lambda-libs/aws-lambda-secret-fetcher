@@ -4,6 +4,9 @@ const project = new typescript.TypeScriptProject({
   name: 'aws-lambda-secret-fetcher',
   projenrcTs: true,
   repository: 'https://github.com/gammarers-aws-lambda-libs/aws-lambda-secret-fetcher.git',
+  deps: [
+    'fetch-retrier@^0.1',
+  ],
   releaseToNpm: true,
   npmTrustedPublishing: true,
   npmAccess: javascript.NpmAccess.PUBLIC,

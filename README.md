@@ -1,19 +1,30 @@
 # AWS Lambda Secret Fetcher
 
+[![npm version](https://img.shields.io/npm/v/aws-lambda-secret-fetcher.svg)](https://www.npmjs.com/package/aws-lambda-secret-fetcher)
+[![License](https://img.shields.io/npm/l/aws-lambda-secret-fetcher.svg)](https://www.npmjs.com/package/aws-lambda-secret-fetcher)
+
 A lightweight TypeScript library for fetching secrets from AWS Secrets Manager using the [AWS Parameters and Secrets Lambda Extension](https://docs.aws.amazon.com/secretsmanager/latest/userguide/retrieving-secrets_lambda.html).
 
 ## Features
 
-- 🚀 Uses the local Lambda Extension API (no SDK required)
-- 🔄 Built-in retry with exponential backoff (Full Jitter)
-- ⏱️ Configurable timeout
-- 📦 Automatic JSON parsing for secret values
-- 💪 TypeScript support with generics
+- Uses the local Lambda Extension API (no AWS SDK required)
+- Retry with timeout and full jitter backoff via [fetch-retrier](https://www.npmjs.com/package/fetch-retrier)
+- Configurable timeout, retries, and base backoff
+- Automatic JSON parsing for secret values
+- TypeScript support with generics
 
 ## Installation
 
+**npm**
+
 ```bash
 npm install aws-lambda-secret-fetcher
+```
+
+**yarn**
+
+```bash
+yarn add aws-lambda-secret-fetcher
 ```
 
 ## Prerequisites
@@ -47,13 +58,21 @@ console.log(credentials.username); // Type-safe access
 import { secretFetcher, type GetSecretValueOptions } from 'aws-lambda-secret-fetcher';
 
 const options: GetSecretValueOptions = {
-  timeoutMs: 3000,    // Timeout per request (default: 2000)
-  retries: 5,         // Number of retry attempts (default: 3)
-  baseBackoffMs: 500, // Base backoff time for retries (default: 300)
+  timeoutMs: 3000,
+  retries: 5,
+  baseBackoffMs: 500,
 };
 
 const secret = await secretFetcher.getSecretValue('my-secret', options);
 ```
+
+## Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `timeoutMs` | `number` | `2000` | Request timeout in milliseconds per attempt |
+| `retries` | `number` | `3` | Maximum number of attempts (including the first request) |
+| `baseBackoffMs` | `number` | `300` | Base delay in milliseconds for backoff between retries |
 
 ## API
 
@@ -68,28 +87,19 @@ Fetches a secret value from AWS Secrets Manager via the Lambda Extension.
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `name` | `string` | The name or ARN of the secret |
-| `options` | `GetSecretValueOptions` | Optional configuration |
-
-#### Options
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `timeoutMs` | `number` | `2000` | Request timeout in milliseconds |
-| `retries` | `number` | `3` | Number of retry attempts |
-| `baseBackoffMs` | `number` | `300` | Base backoff time for exponential retry |
+| `options` | `GetSecretValueOptions` | Optional timeout, retries, and backoff settings |
 
 #### Returns
 
-- `Promise<T>` - The secret value. If the secret is a JSON string, it will be automatically parsed.
+- `Promise<T>` — The secret value. If the secret is a JSON string, it is automatically parsed as `T`.
 
 #### Throws
 
-- `Error` - If the secret cannot be retrieved after all retries
-- `Error` - If the response format is invalid
+- `Error` — If the secret cannot be retrieved after all retries, or if the response format is invalid.
 
 ## Retry Behavior
 
-The library implements AWS-recommended Full Jitter exponential backoff for retries. It will retry on:
+Retries use full jitter exponential backoff. The library retries on:
 
 - HTTP status codes: 429, 500, 502, 503, 504
 - Lambda Extension not ready (400 with "not ready to serve traffic")
@@ -103,4 +113,4 @@ The library implements AWS-recommended Full Jitter exponential backoff for retri
 
 ## License
 
-Apache-2.0
+This project is licensed under the Apache-2.0 License.

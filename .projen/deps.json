@@ -75,7 +75,7 @@
     },
     {
       "name": "fetch-retrier",
-      "version": "^0.1",
+      "version": "^0.2",
       "type": "runtime"
     }
   ],

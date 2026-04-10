@@ -43,7 +43,7 @@
     "typescript": "5.9.x"
   },
   "dependencies": {
-    "fetch-retrier": "^0.1"
+    "fetch-retrier": "^0.2"
   },
   "engines": {
     "node": ">= 20.0.0"

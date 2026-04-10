@@ -4,6 +4,8 @@ import { fetchRetrier, type RequestOptions } from 'fetch-retrier';
  * Options for fetching a secret from the Secrets Manager Extension.
  */
 export interface GetSecretValueOptions {
+  /** Extension HTTP port (localhost). Default: 2773 (AWS extension default). Set explicitly when using a custom port. */
+  extensionHttpPort?: string | number;
   /** Request timeout in milliseconds. Default: 2000 */
   timeoutMs?: number;
   /** Maximum number of attempts (including the first request). Default: 3 */
@@ -27,18 +29,20 @@ interface SecretResponse {
 }
 
 /**
- * Fetches a secret value from the AWS Lambda Secrets Manager Extension (localhost:2773).
+ * Fetches a secret value from the AWS Lambda Parameters and Secrets Extension (default localhost:2773).
+ * Pass `extensionHttpPort` in options when the extension listens on a non-default port.
  * Uses retries with full jitter backoff for transient errors (e.g. 5xx, 429, or extension "not ready").
  *
  * @param name - Secret name (identifier) to fetch
- * @param options - Optional timeout, retry, and backoff settings
+ * @param options - Optional port, timeout, retry, and backoff settings
  * @returns The secret value as string, or parsed as T if the stored value is JSON
  * @throws Error if the response format is invalid or the request fails after retries
  */
 const getSecretValue = async <T = string>(name: string, options: GetSecretValueOptions = {}): Promise<T> => {
-  const { timeoutMs = 2000, retries = 3, baseBackoffMs = 300 } = options;
+  const { extensionHttpPort = '2773', timeoutMs = 2000, retries = 3, baseBackoffMs = 300 } = options;
 
-  const url = `http://localhost:2773/secretsmanager/get?secretId=${encodeURIComponent(name)}`;
+  const port = String(extensionHttpPort);
+  const url = `http://localhost:${port}/secretsmanager/get?secretId=${encodeURIComponent(name)}`;
 
   const requestOptions: RequestOptions = {
     headers: {

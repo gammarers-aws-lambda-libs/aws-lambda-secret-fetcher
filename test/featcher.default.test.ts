@@ -13,7 +13,7 @@ describe('secretFetcher.getSecretValueValue', () => {
     global.fetch = originalFetch;
   });
 
-  test('returns parsed JSON when response is JSON string', async () => {
+  test('should return parsed JSON when response is JSON string', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -27,7 +27,7 @@ describe('secretFetcher.getSecretValueValue', () => {
     expect(result).toEqual({ username: 'admin', password: 'secret' });
   });
 
-  test('returns plain string when response is not JSON', async () => {
+  test('should return plain string when response is not JSON', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -41,7 +41,7 @@ describe('secretFetcher.getSecretValueValue', () => {
     expect(result).toBe('plain-secret-value');
   });
 
-  test('throws on invalid response format', async () => {
+  test('should throw on invalid response format', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
       json: async () => ({ invalid: 'response' }),
@@ -50,7 +50,7 @@ describe('secretFetcher.getSecretValueValue', () => {
     await expect(secretFetcher.getSecretValue('test-secret')).rejects.toThrow('Invalid secret response format');
   });
 
-  test('uses extensionHttpPort from options when set', async () => {
+  test('should use extensionHttpPort from options when set', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
       json: async () => ({

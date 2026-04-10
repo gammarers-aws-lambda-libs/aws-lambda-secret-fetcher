@@ -49,4 +49,21 @@ describe('secretFetcher.getSecretValueValue', () => {
 
     await expect(secretFetcher.getSecretValue('test-secret')).rejects.toThrow('Invalid secret response format');
   });
+
+  test('uses extensionHttpPort from options when set', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
+        Name: 'test-secret',
+        SecretString: 'plain-secret-value',
+      }),
+    });
+
+    await secretFetcher.getSecretValue('test-secret', { extensionHttpPort: 9999 });
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://localhost:9999/secretsmanager/get?secretId=test-secret',
+      expect.any(Object),
+    );
+  });
 });

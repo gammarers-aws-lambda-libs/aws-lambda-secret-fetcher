@@ -1,5 +1,6 @@
 {
   "name": "aws-lambda-secret-fetcher",
+  "description": "Lightweight TypeScript library for fetching secrets from AWS Secrets Manager via the AWS Parameters and Secrets Lambda Extension (http://localhost, default port 2773), with retries and timeouts using fetch-retrier.",
   "repository": {
     "type": "git",
     "url": "https://github.com/gammarers-aws-lambda-libs/aws-lambda-secret-fetcher.git"

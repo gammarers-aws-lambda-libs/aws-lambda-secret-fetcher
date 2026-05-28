@@ -110,8 +110,10 @@ Fetches a secret value from AWS Secrets Manager via the Lambda Extension.
 
 #### Throws
 
-- `Error` — If the response body is not a valid extension payload, if the extension HTTP port is invalid (not a number or outside 1–65535), or if the request fails after all retries.
-- `FetchRetrierHttpError` (from `fetch-retrier`) — On non-success HTTP responses that are not retried, or after the last failed attempt on retriable statuses.
+- `Error` — If the response body is not a valid extension payload, or if the extension HTTP port is invalid (not a number or outside 1–65535).
+- `FetchRetrierHttpError` (from `fetch-retrier` ^0.3) — On non-success HTTP responses that are not retried, or after the last failed attempt on retriable statuses.
+- `FetchRetrierNetworkError` (from `fetch-retrier` ^0.3) — On network-level `fetch` failures after the last attempt.
+- `FetchRetrierAbortError` (from `fetch-retrier` ^0.3) — On per-attempt timeout after the last attempt.
 
 ## Retry behavior
 

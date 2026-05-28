@@ -6,7 +6,7 @@ const project = new typescript.TypeScriptProject({
   repository: 'https://github.com/gammarers-aws-lambda-libs/aws-lambda-secret-fetcher.git',
   description: 'Lightweight TypeScript library for fetching secrets from AWS Secrets Manager via the AWS Parameters and Secrets Lambda Extension (http://localhost, default port 2773), with retries and timeouts using fetch-retrier.',
   deps: [
-    'fetch-retrier@^0.2',
+    'fetch-retrier@^0.3.1',
   ],
   releaseToNpm: true,
   npmTrustedPublishing: true,

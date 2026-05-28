@@ -215,4 +215,31 @@ describe('secretFetcher.getSecretValueValue', () => {
     expect(err).toMatchObject({ status: 404 });
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
+
+  describe('errors from fetch-retrier', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    test('should reject with FetchRetrierNetworkError after network failures are exhausted', async () => {
+      const networkError = new TypeError('fetch failed');
+      mockFetch.mockRejectedValue(networkError);
+
+      const pending = secretFetcher.getSecretValue('test-secret', {
+        retries: 2,
+        baseBackoffMs: 10,
+      });
+      const assertion = expect(pending).rejects.toMatchObject({
+        name: 'FetchRetrierNetworkError',
+        cause: networkError,
+      });
+      await jest.runAllTimersAsync();
+      await assertion;
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+  });
 });

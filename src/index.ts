@@ -41,7 +41,10 @@ interface SecretResponse {
  * @param name - Secret name (identifier) to fetch
  * @param options - Optional port, timeout, retry, and backoff settings
  * @returns The secret value as string, or parsed as T if the stored value is JSON
- * @throws Error if the response format is invalid or the request fails after retries
+ * @throws Error if the response format is invalid, the extension HTTP port is invalid, or the request fails after retries
+ * @throws {import('fetch-retrier').FetchRetrierHttpError} On non-retriable HTTP responses or after the last retriable attempt
+ * @throws {import('fetch-retrier').FetchRetrierNetworkError} On network failures after the last attempt
+ * @throws {import('fetch-retrier').FetchRetrierAbortError} On per-attempt timeout after the last attempt
  */
 const getSecretValue = async <T = string>(name: string, options: GetSecretValueOptions = {}): Promise<T> => {
   const { extensionHttpPort, timeoutMs = 2000, retries = 3, baseBackoffMs = 300 } = options;

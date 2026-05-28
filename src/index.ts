@@ -4,7 +4,12 @@ import { fetchRetrier, type RequestOptions } from 'fetch-retrier';
  * Options for fetching a secret from the Secrets Manager Extension.
  */
 export interface GetSecretValueOptions {
-  /** Extension HTTP port (localhost). Default: 2773 (AWS extension default). Set explicitly when using a custom port. */
+  /**
+   * Extension HTTP port for the local extension endpoint.
+   *
+   * If omitted, this library reads `process.env.PARAMETERS_SECRETS_EXTENSION_HTTP_PORT`
+   * and falls back to `2773`.
+   */
   extensionHttpPort?: string | number;
   /** Request timeout in milliseconds. Default: 2000 */
   timeoutMs?: number;
@@ -30,18 +35,21 @@ interface SecretResponse {
 
 /**
  * Fetches a secret value from the AWS Lambda Parameters and Secrets Extension (default localhost:2773).
- * Pass `extensionHttpPort` in options when the extension listens on a non-default port.
+ * If `extensionHttpPort` is not provided, uses `process.env.PARAMETERS_SECRETS_EXTENSION_HTTP_PORT`.
  * Uses retries with full jitter backoff for transient errors (e.g. 5xx, 429, or extension "not ready").
  *
  * @param name - Secret name (identifier) to fetch
  * @param options - Optional port, timeout, retry, and backoff settings
  * @returns The secret value as string, or parsed as T if the stored value is JSON
- * @throws Error if the response format is invalid or the request fails after retries
+ * @throws Error if the response format is invalid, the extension HTTP port is invalid, or the request fails after retries
+ * @throws {import('fetch-retrier').FetchRetrierHttpError} On non-retriable HTTP responses or after the last retriable attempt
+ * @throws {import('fetch-retrier').FetchRetrierNetworkError} On network failures after the last attempt
+ * @throws {import('fetch-retrier').FetchRetrierAbortError} On per-attempt timeout after the last attempt
  */
 const getSecretValue = async <T = string>(name: string, options: GetSecretValueOptions = {}): Promise<T> => {
-  const { extensionHttpPort = '2773', timeoutMs = 2000, retries = 3, baseBackoffMs = 300 } = options;
+  const { extensionHttpPort, timeoutMs = 2000, retries = 3, baseBackoffMs = 300 } = options;
 
-  const port = String(extensionHttpPort);
+  const port = resolveExtensionHttpPort(extensionHttpPort);
   const url = `http://localhost:${port}/secretsmanager/get?secretId=${encodeURIComponent(name)}`;
 
   const requestOptions: RequestOptions = {
@@ -76,6 +84,35 @@ const getSecretValue = async <T = string>(name: string, options: GetSecretValueO
   }
 
   return secretString as T;
+};
+
+/**
+ * Resolves the HTTP port used to reach the local extension endpoint.
+ *
+ * Precedence:
+ * - explicit `overridePort` argument
+ * - `process.env.PARAMETERS_SECRETS_EXTENSION_HTTP_PORT`
+ * - default `2773`
+ *
+ * @param overridePort - Optional explicit port override
+ * @returns A normalized port string in the range 1..65535
+ * @throws Error if the provided port is not a valid TCP port number
+ */
+const resolveExtensionHttpPort = (overridePort: GetSecretValueOptions['extensionHttpPort']): string => {
+  const fromOverride = overridePort === undefined ? undefined : String(overridePort);
+  const fromEnv = process.env.PARAMETERS_SECRETS_EXTENSION_HTTP_PORT;
+  const candidate = (fromOverride ?? fromEnv ?? '2773').trim();
+
+  if (!/^\d+$/.test(candidate)) {
+    throw new Error('Invalid extension HTTP port: must be a number');
+  }
+
+  const port = Number.parseInt(candidate, 10);
+  if (port < 1 || port > 65535) {
+    throw new Error('Invalid extension HTTP port: must be between 1 and 65535');
+  }
+
+  return String(port);
 };
 
 /**

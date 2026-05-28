@@ -4,14 +4,17 @@ import { secretFetcher } from '../src';
 describe('secretFetcher.getSecretValueValue', () => {
   const mockFetch = jest.fn();
   const originalFetch = global.fetch;
+  const extensionHttpPortEnv = 'PARAMETERS_SECRETS_EXTENSION_HTTP_PORT';
 
   beforeEach(() => {
     global.fetch = mockFetch;
     mockFetch.mockReset();
+    delete process.env[extensionHttpPortEnv];
   });
 
   afterEach(() => {
     global.fetch = originalFetch;
+    delete process.env[extensionHttpPortEnv];
   });
 
   const okSecretResponse = () => ({
@@ -101,6 +104,65 @@ describe('secretFetcher.getSecretValueValue', () => {
     );
   });
 
+  describe('extension HTTP port resolution', () => {
+    const okFetch = () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
+          Name: 'test-secret',
+          SecretString: 'plain-secret-value',
+        }),
+      });
+    };
+
+    test('should use PARAMETERS_SECRETS_EXTENSION_HTTP_PORT when extensionHttpPort is omitted', async () => {
+      process.env[extensionHttpPortEnv] = '8080';
+      okFetch();
+
+      await secretFetcher.getSecretValue('test-secret');
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:8080/secretsmanager/get?secretId=test-secret',
+        expect.any(Object),
+      );
+    });
+
+    test('should default to port 2773 when extensionHttpPort and env are unset', async () => {
+      okFetch();
+
+      await secretFetcher.getSecretValue('test-secret');
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:2773/secretsmanager/get?secretId=test-secret',
+        expect.any(Object),
+      );
+    });
+
+    test('should prefer extensionHttpPort option over PARAMETERS_SECRETS_EXTENSION_HTTP_PORT', async () => {
+      process.env[extensionHttpPortEnv] = '8080';
+      okFetch();
+
+      await secretFetcher.getSecretValue('test-secret', { extensionHttpPort: 9999 });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:9999/secretsmanager/get?secretId=test-secret',
+        expect.any(Object),
+      );
+    });
+
+    test('should throw when extension HTTP port is not numeric', async () => {
+      await expect(
+        secretFetcher.getSecretValue('test-secret', { extensionHttpPort: 'not-a-port' }),
+      ).rejects.toThrow('Invalid extension HTTP port: must be a number');
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    test('should throw when extension HTTP port is out of range', async () => {
+      await expect(
+        secretFetcher.getSecretValue('test-secret', { extensionHttpPort: 70000 }),
+      ).rejects.toThrow('Invalid extension HTTP port: must be between 1 and 65535');
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+  });
+
   describe('retry when the extension returns transient HTTP errors', () => {
     beforeEach(() => {
       jest.useFakeTimers();
@@ -152,5 +214,32 @@ describe('secretFetcher.getSecretValueValue', () => {
     expect(err).toBeInstanceOf(FetchRetrierHttpError);
     expect(err).toMatchObject({ status: 404 });
     expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  describe('errors from fetch-retrier', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    test('should reject with FetchRetrierNetworkError after network failures are exhausted', async () => {
+      const networkError = new TypeError('fetch failed');
+      mockFetch.mockRejectedValue(networkError);
+
+      const pending = secretFetcher.getSecretValue('test-secret', {
+        retries: 2,
+        baseBackoffMs: 10,
+      });
+      const assertion = expect(pending).rejects.toMatchObject({
+        name: 'FetchRetrierNetworkError',
+        cause: networkError,
+      });
+      await jest.runAllTimersAsync();
+      await assertion;
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
   });
 });

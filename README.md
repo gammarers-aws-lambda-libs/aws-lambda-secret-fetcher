@@ -3,12 +3,15 @@
 [![npm version](https://img.shields.io/npm/v/aws-lambda-secret-fetcher.svg)](https://www.npmjs.com/package/aws-lambda-secret-fetcher)
 [![License](https://img.shields.io/npm/l/aws-lambda-secret-fetcher.svg)](https://www.npmjs.com/package/aws-lambda-secret-fetcher)
 
-A lightweight TypeScript library for fetching secrets from AWS Secrets Manager using the [AWS Parameters and Secrets Lambda Extension](https://docs.aws.amazon.com/secretsmanager/latest/userguide/retrieving-secrets_lambda.html). It calls the extension over `http://localhost` (default port **2773**) with retries and timeouts via [fetch-retrier](https://www.npmjs.com/package/fetch-retrier).
+A lightweight TypeScript library for fetching secrets from AWS Secrets Manager using the [AWS Parameters and Secrets Lambda Extension](https://docs.aws.amazon.com/secretsmanager/latest/userguide/retrieving-secrets_lambda.html). It calls the extension at `http://localhost:{port}` with retries and timeouts via [fetch-retrier](https://www.npmjs.com/package/fetch-retrier).
+
+The extension HTTP port is resolved automatically: `extensionHttpPort` option → `PARAMETERS_SECRETS_EXTENSION_HTTP_PORT` environment variable → default `2773`.
 
 ## Features
 
 - Uses the local Lambda Extension HTTP API (no AWS SDK required)
-- Configurable extension HTTP port via `extensionHttpPort` (default `2773`; pass through from your environment when using a custom extension port)
+- Reads the extension HTTP port from `PARAMETERS_SECRETS_EXTENSION_HTTP_PORT` when `extensionHttpPort` is omitted
+- Optional `extensionHttpPort` override for explicit port configuration
 - Retry with timeout and full jitter backoff via [fetch-retrier](https://www.npmjs.com/package/fetch-retrier)
 - Configurable timeout, retries, and base backoff
 - Automatic JSON parsing for secret values stored as JSON strings
@@ -49,6 +52,8 @@ const credentials = await secretFetcher.getSecretValue<DbCredentials>('my-db-cre
 console.log(credentials.username); // Type-safe access
 ```
 
+When the extension layer sets `PARAMETERS_SECRETS_EXTENSION_HTTP_PORT` on your Lambda function (the usual case), you do not need to pass a port in code.
+
 ### With options
 
 ```typescript
@@ -63,23 +68,23 @@ const options: GetSecretValueOptions = {
 const secret = await secretFetcher.getSecretValue('my-secret', options);
 ```
 
-### Custom extension HTTP port
+### Override extension HTTP port
 
-If you configure a non-default extension port (for example via the Lambda environment variable `PARAMETERS_SECRETS_EXTENSION_HTTP_PORT`), pass that value in from your function code:
+Use `extensionHttpPort` only when you need to override the environment variable or default:
 
 ```typescript
 import { secretFetcher } from 'aws-lambda-secret-fetcher';
 
-const extensionHttpPort = process.env.PARAMETERS_SECRETS_EXTENSION_HTTP_PORT ?? '2773';
-
-const secret = await secretFetcher.getSecretValue('my-secret', { extensionHttpPort });
+const secret = await secretFetcher.getSecretValue('my-secret', {
+  extensionHttpPort: 9999,
+});
 ```
 
 ## Options
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `extensionHttpPort` | `string \| number` | `'2773'` | TCP port the extension listens on at `localhost` |
+| `extensionHttpPort` | `string \| number` | `PARAMETERS_SECRETS_EXTENSION_HTTP_PORT` or `2773` | TCP port the extension listens on at `localhost`. Highest precedence when set. |
 | `timeoutMs` | `number` | `2000` | Request timeout in milliseconds per attempt |
 | `retries` | `number` | `3` | Maximum number of attempts (including the first request) |
 | `baseBackoffMs` | `number` | `300` | Base delay in milliseconds for backoff between retries |
@@ -105,7 +110,7 @@ Fetches a secret value from AWS Secrets Manager via the Lambda Extension.
 
 #### Throws
 
-- `Error` — If the response body is not a valid extension payload, or if the request fails after all retries.
+- `Error` — If the response body is not a valid extension payload, if the extension HTTP port is invalid (not a number or outside 1–65535), or if the request fails after all retries.
 - `FetchRetrierHttpError` (from `fetch-retrier`) — On non-success HTTP responses that are not retried, or after the last failed attempt on retriable statuses.
 
 ## Retry behavior
@@ -122,6 +127,7 @@ Retries use full jitter exponential backoff. The library retries on:
 - Node.js >= 20.0.0
 - AWS Lambda with the [AWS Parameters and Secrets Lambda Extension](https://docs.aws.amazon.com/secretsmanager/latest/userguide/retrieving-secrets_lambda.html) layer attached
 - Runtime provides `AWS_SESSION_TOKEN` (used in the `X-Aws-Parameters-Secrets-Token` header expected by the extension)
+- Optional: `PARAMETERS_SECRETS_EXTENSION_HTTP_PORT` set by the extension layer when using a non-default port (read automatically when `extensionHttpPort` is omitted)
 
 ## License
 

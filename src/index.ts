@@ -1,4 +1,5 @@
 import { fetchRetrier, type RequestOptions } from 'fetch-retrier';
+import { StrictEnvResolver, StrictEnvType, StrictEnvValidationError } from 'strict-env-resolver';
 
 /**
  * Options for fetching a secret from the Secrets Manager Extension.
@@ -41,7 +42,8 @@ interface SecretResponse {
  * @param name - Secret name (identifier) to fetch
  * @param options - Optional port, timeout, retry, and backoff settings
  * @returns The secret value as string, or parsed as T if the stored value is JSON
- * @throws Error if AWS_SESSION_TOKEN is unset, the response format is invalid, the extension HTTP port is invalid, or the request fails after retries
+ * @throws Error if AWS_SESSION_TOKEN is unset, the extension HTTP port is invalid, or the response format is invalid
+ * @throws {import('strict-env-resolver').StrictEnvValidationError} If an environment variable value is invalid
  * @throws {import('fetch-retrier').FetchRetrierHttpError} On non-retriable HTTP responses or after the last retriable attempt
  * @throws {import('fetch-retrier').FetchRetrierNetworkError} On network failures after the last attempt
  * @throws {import('fetch-retrier').FetchRetrierAbortError} On per-attempt timeout after the last attempt
@@ -87,6 +89,14 @@ const getSecretValue = async <T = string>(name: string, options: GetSecretValueO
   return secretString as T;
 };
 
+const AWS_SESSION_TOKEN_GUIDANCE =
+  'AWS_SESSION_TOKEN is not set. This library only works inside an AWS Lambda execution environment ' +
+  'where the runtime provides AWS_SESSION_TOKEN for the Parameters and Secrets Extension. ' +
+  'Attach the extension layer and run your code as a Lambda function handler.';
+
+const MIN_TCP_PORT = 1;
+const MAX_TCP_PORT = 65535;
+
 /**
  * Resolves the AWS session token required by the Parameters and Secrets Extension.
  *
@@ -95,19 +105,22 @@ const getSecretValue = async <T = string>(name: string, options: GetSecretValueO
  *
  * @returns The non-empty session token
  * @throws Error if `AWS_SESSION_TOKEN` is missing or blank (e.g. outside Lambda)
+ * @throws {import('strict-env-resolver').StrictEnvValidationError} If `AWS_SESSION_TOKEN` is invalid
  */
 const resolveAwsSessionToken = (): string => {
-  const token = process.env.AWS_SESSION_TOKEN?.trim();
-
-  if (!token) {
-    throw new Error(
-      'AWS_SESSION_TOKEN is not set. This library only works inside an AWS Lambda execution environment ' +
-      'where the runtime provides AWS_SESSION_TOKEN for the Parameters and Secrets Extension. ' +
-      'Attach the extension layer and run your code as a Lambda function handler.',
-    );
+  try {
+    return StrictEnvResolver.resolve('AWS_SESSION_TOKEN', StrictEnvType.String, { trim: true });
+  } catch (e) {
+    if (
+      e instanceof StrictEnvValidationError &&
+      e.errors.length === 1 &&
+      e.errors[0]?.key === 'AWS_SESSION_TOKEN' &&
+      e.errors[0]?.kind === 'missing'
+    ) {
+      throw new Error(AWS_SESSION_TOKEN_GUIDANCE);
+    }
+    throw e;
   }
-
-  return token;
 };
 
 /**
@@ -115,24 +128,51 @@ const resolveAwsSessionToken = (): string => {
  *
  * Precedence:
  * - explicit `overridePort` argument
- * - `process.env.PARAMETERS_SECRETS_EXTENSION_HTTP_PORT`
- * - default `2773`
+ * - `process.env.PARAMETERS_SECRETS_EXTENSION_HTTP_PORT` (default `2773` when unset)
  *
  * @param overridePort - Optional explicit port override
  * @returns A normalized port string in the range 1..65535
  * @throws Error if the provided port is not a valid TCP port number
+ * @throws {import('strict-env-resolver').StrictEnvValidationError} If the env port value is invalid
  */
 const resolveExtensionHttpPort = (overridePort: GetSecretValueOptions['extensionHttpPort']): string => {
-  const fromOverride = overridePort === undefined ? undefined : String(overridePort);
-  const fromEnv = process.env.PARAMETERS_SECRETS_EXTENSION_HTTP_PORT;
-  const candidate = (fromOverride ?? fromEnv ?? '2773').trim();
+  const port = overridePort === undefined
+    ? StrictEnvResolver.resolve(
+      'PARAMETERS_SECRETS_EXTENSION_HTTP_PORT',
+      StrictEnvType.Number,
+      { default: 2773 },
+    )
+    : parseExtensionHttpPortOverride(overridePort);
+
+  return assertValidTcpPort(port);
+};
+
+/**
+ * Parses an explicit extension HTTP port override from options.
+ *
+ * @param overridePort - Port value from `GetSecretValueOptions.extensionHttpPort`
+ * @returns Parsed port number
+ * @throws Error if the value is not a base-10 integer port string
+ */
+const parseExtensionHttpPortOverride = (overridePort: string | number): number => {
+  const candidate = String(overridePort).trim();
 
   if (!/^\d+$/.test(candidate)) {
     throw new Error('Invalid extension HTTP port: must be a number');
   }
 
-  const port = Number.parseInt(candidate, 10);
-  if (port < 1 || port > 65535) {
+  return Number.parseInt(candidate, 10);
+};
+
+/**
+ * Ensures a TCP port number is within the valid range.
+ *
+ * @param port - Parsed port number
+ * @returns The port as a string
+ * @throws Error if the port is outside 1..65535
+ */
+const assertValidTcpPort = (port: number): string => {
+  if (port < MIN_TCP_PORT || port > MAX_TCP_PORT) {
     throw new Error('Invalid extension HTTP port: must be between 1 and 65535');
   }
 

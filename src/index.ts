@@ -41,7 +41,7 @@ interface SecretResponse {
  * @param name - Secret name (identifier) to fetch
  * @param options - Optional port, timeout, retry, and backoff settings
  * @returns The secret value as string, or parsed as T if the stored value is JSON
- * @throws Error if the response format is invalid, the extension HTTP port is invalid, or the request fails after retries
+ * @throws Error if AWS_SESSION_TOKEN is unset, the response format is invalid, the extension HTTP port is invalid, or the request fails after retries
  * @throws {import('fetch-retrier').FetchRetrierHttpError} On non-retriable HTTP responses or after the last retriable attempt
  * @throws {import('fetch-retrier').FetchRetrierNetworkError} On network failures after the last attempt
  * @throws {import('fetch-retrier').FetchRetrierAbortError} On per-attempt timeout after the last attempt
@@ -50,11 +50,12 @@ const getSecretValue = async <T = string>(name: string, options: GetSecretValueO
   const { extensionHttpPort, timeoutMs = 2000, retries = 3, baseBackoffMs = 300 } = options;
 
   const port = resolveExtensionHttpPort(extensionHttpPort);
+  const sessionToken = resolveAwsSessionToken();
   const url = `http://localhost:${port}/secretsmanager/get?secretId=${encodeURIComponent(name)}`;
 
   const requestOptions: RequestOptions = {
     headers: {
-      'X-Aws-Parameters-Secrets-Token': process.env.AWS_SESSION_TOKEN ?? '',
+      'X-Aws-Parameters-Secrets-Token': sessionToken,
     },
     retries,
     timeoutMs,
@@ -84,6 +85,29 @@ const getSecretValue = async <T = string>(name: string, options: GetSecretValueO
   }
 
   return secretString as T;
+};
+
+/**
+ * Resolves the AWS session token required by the Parameters and Secrets Extension.
+ *
+ * Lambda injects `AWS_SESSION_TOKEN` into the execution environment; it is sent as
+ * `X-Aws-Parameters-Secrets-Token` on extension requests.
+ *
+ * @returns The non-empty session token
+ * @throws Error if `AWS_SESSION_TOKEN` is missing or blank (e.g. outside Lambda)
+ */
+const resolveAwsSessionToken = (): string => {
+  const token = process.env.AWS_SESSION_TOKEN?.trim();
+
+  if (!token) {
+    throw new Error(
+      'AWS_SESSION_TOKEN is not set. This library only works inside an AWS Lambda execution environment ' +
+      'where the runtime provides AWS_SESSION_TOKEN for the Parameters and Secrets Extension. ' +
+      'Attach the extension layer and run your code as a Lambda function handler.',
+    );
+  }
+
+  return token;
 };
 
 /**

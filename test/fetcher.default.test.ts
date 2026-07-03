@@ -5,16 +5,19 @@ describe('secretFetcher.getSecretValueValue', () => {
   const mockFetch = jest.fn();
   const originalFetch = global.fetch;
   const extensionHttpPortEnv = 'PARAMETERS_SECRETS_EXTENSION_HTTP_PORT';
+  const awsSessionTokenEnv = 'AWS_SESSION_TOKEN';
 
   beforeEach(() => {
     global.fetch = mockFetch;
     mockFetch.mockReset();
     delete process.env[extensionHttpPortEnv];
+    process.env[awsSessionTokenEnv] = 'test-session-token';
   });
 
   afterEach(() => {
     global.fetch = originalFetch;
     delete process.env[extensionHttpPortEnv];
+    delete process.env[awsSessionTokenEnv];
   });
 
   const okSecretResponse = () => ({
@@ -102,6 +105,26 @@ describe('secretFetcher.getSecretValueValue', () => {
       'http://localhost:9999/secretsmanager/get?secretId=test-secret',
       expect.any(Object),
     );
+  });
+
+  describe('AWS_SESSION_TOKEN validation', () => {
+    test('should throw when AWS_SESSION_TOKEN is unset', async () => {
+      delete process.env[awsSessionTokenEnv];
+
+      await expect(secretFetcher.getSecretValue('test-secret')).rejects.toThrow(
+        'AWS_SESSION_TOKEN is not set. This library only works inside an AWS Lambda execution environment',
+      );
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    test('should throw when AWS_SESSION_TOKEN is blank', async () => {
+      process.env[awsSessionTokenEnv] = '   ';
+
+      await expect(secretFetcher.getSecretValue('test-secret')).rejects.toThrow(
+        'AWS_SESSION_TOKEN is not set. This library only works inside an AWS Lambda execution environment',
+      );
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
   });
 
   describe('extension HTTP port resolution', () => {

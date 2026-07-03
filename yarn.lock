@@ -4701,6 +4701,11 @@ stop-iteration-iterator@^1.1.0:
     es-errors "^1.3.0"
     internal-slot "^1.1.0"
 
+strict-env-resolver@^0.5.1:
+  version "0.5.1"
+  resolved "https://registry.yarnpkg.com/strict-env-resolver/-/strict-env-resolver-0.5.1.tgz#d70801b7bb6481dcd94da05e1b7bec27e9f4c8e9"
+  integrity sha512-Asg/+b2lDex4gZAKYwxrrrOUmztlYpWsgTyCsM3sg4cqjwB6CXGNll2cd9kwbYUWexVvunmTSMkr2xurQP/EPQ==
+
 string-length@^4.0.2:
   version "4.0.2"
   resolved "https://registry.yarnpkg.com/string-length/-/string-length-4.0.2.tgz#a8a8dc7bd5c1a82b9b3c8b87e125f66871b6e57a"

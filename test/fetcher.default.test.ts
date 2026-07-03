@@ -1,20 +1,25 @@
 import { FetchRetrierHttpError } from 'fetch-retrier';
+import { StrictEnvResolver, StrictEnvValidationError } from 'strict-env-resolver';
 import { secretFetcher } from '../src';
 
 describe('secretFetcher.getSecretValueValue', () => {
   const mockFetch = jest.fn();
   const originalFetch = global.fetch;
   const extensionHttpPortEnv = 'PARAMETERS_SECRETS_EXTENSION_HTTP_PORT';
+  const awsSessionTokenEnv = 'AWS_SESSION_TOKEN';
 
   beforeEach(() => {
     global.fetch = mockFetch;
     mockFetch.mockReset();
     delete process.env[extensionHttpPortEnv];
+    process.env[awsSessionTokenEnv] = 'test-session-token';
   });
 
   afterEach(() => {
     global.fetch = originalFetch;
     delete process.env[extensionHttpPortEnv];
+    delete process.env[awsSessionTokenEnv];
+    jest.restoreAllMocks();
   });
 
   const okSecretResponse = () => ({
@@ -102,6 +107,61 @@ describe('secretFetcher.getSecretValueValue', () => {
       'http://localhost:9999/secretsmanager/get?secretId=test-secret',
       expect.any(Object),
     );
+  });
+
+  describe('AWS_SESSION_TOKEN validation', () => {
+    test('should throw when AWS_SESSION_TOKEN is unset', async () => {
+      delete process.env[awsSessionTokenEnv];
+
+      await expect(secretFetcher.getSecretValue('test-secret')).rejects.toThrow(
+        'AWS_SESSION_TOKEN is not set. This library only works inside an AWS Lambda execution environment',
+      );
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    test('should throw when AWS_SESSION_TOKEN is blank', async () => {
+      process.env[awsSessionTokenEnv] = '   ';
+
+      await expect(secretFetcher.getSecretValue('test-secret')).rejects.toThrow(
+        'AWS_SESSION_TOKEN is not set. This library only works inside an AWS Lambda execution environment',
+      );
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    test('should rethrow StrictEnvValidationError when AWS_SESSION_TOKEN is not a missing error', async () => {
+      const validationError = new StrictEnvValidationError([
+        {
+          key: 'AWS_SESSION_TOKEN',
+          message: 'Env AWS_SESSION_TOKEN: must be one of [expected]',
+          kind: 'invalid_enum',
+          raw: 'unexpected',
+        },
+      ]);
+      const originalResolve = StrictEnvResolver.resolve;
+      jest.spyOn(StrictEnvResolver, 'resolve').mockImplementation((key, spec?, options?) => {
+        if (key === 'AWS_SESSION_TOKEN') {
+          throw validationError;
+        }
+        return originalResolve.call(StrictEnvResolver, key, spec, options);
+      });
+
+      await expect(secretFetcher.getSecretValue('test-secret')).rejects.toBe(validationError);
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    test('should rethrow when StrictEnvResolver fails with a non-validation error', async () => {
+      const otherError = new Error('unexpected resolver failure');
+      const originalResolve = StrictEnvResolver.resolve;
+      jest.spyOn(StrictEnvResolver, 'resolve').mockImplementation((key, spec?, options?) => {
+        if (key === 'AWS_SESSION_TOKEN') {
+          throw otherError;
+        }
+        return originalResolve.call(StrictEnvResolver, key, spec, options);
+      });
+
+      await expect(secretFetcher.getSecretValue('test-secret')).rejects.toBe(otherError);
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
   });
 
   describe('extension HTTP port resolution', () => {

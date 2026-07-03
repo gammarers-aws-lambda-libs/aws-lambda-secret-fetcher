@@ -44,7 +44,8 @@
     "typescript": "5.9.x"
   },
   "dependencies": {
-    "fetch-retrier": "^0.3.1"
+    "fetch-retrier": "^0.3.1",
+    "strict-env-resolver": "^0.5.1"
   },
   "engines": {
     "node": ">= 20.0.0"

@@ -5,7 +5,7 @@
 
 A lightweight TypeScript library for fetching secrets from AWS Secrets Manager using the [AWS Parameters and Secrets Lambda Extension](https://docs.aws.amazon.com/secretsmanager/latest/userguide/retrieving-secrets_lambda.html). It calls the extension at `http://localhost:{port}` with retries and timeouts via [fetch-retrier](https://www.npmjs.com/package/fetch-retrier).
 
-Environment variables are validated with [strict-env-resolver](https://www.npmjs.com/package/strict-env-resolver). The extension HTTP port is resolved automatically: `extensionHttpPort` option → `PARAMETERS_SECRETS_EXTENSION_HTTP_PORT` environment variable → default `2773`.
+Environment variables are validated with [strict-env-resolver](https://www.npmjs.com/package/strict-env-resolver). Secret JSON values are parsed with [quiet-json-parser](https://www.npmjs.com/package/quiet-json-parser). The extension HTTP port is resolved automatically: `extensionHttpPort` option → `PARAMETERS_SECRETS_EXTENSION_HTTP_PORT` environment variable → default `2773`.
 
 ## Lambda execution environment only
 
@@ -22,7 +22,7 @@ It is not intended for local development, unit tests against a real extension, o
 - Optional `extensionHttpPort` override for explicit port configuration
 - Retry with timeout and full jitter backoff via [fetch-retrier](https://www.npmjs.com/package/fetch-retrier)
 - Configurable timeout, retries, and base backoff
-- Automatic JSON parsing for secret values stored as JSON strings
+- Automatic JSON parsing via [quiet-json-parser](https://www.npmjs.com/package/quiet-json-parser); invalid or empty JSON falls back to the original string
 - TypeScript support with generics
 
 ## Installation
@@ -114,7 +114,7 @@ Fetches a secret value from AWS Secrets Manager via the Lambda Extension.
 
 #### Returns
 
-- `Promise<T>` — The secret value. If the secret is a JSON string, it is automatically parsed as `T`.
+- `Promise<T>` — The secret value. Valid JSON is parsed as `T` via quiet-json-parser; otherwise the original string is returned.
 
 #### Throws
 

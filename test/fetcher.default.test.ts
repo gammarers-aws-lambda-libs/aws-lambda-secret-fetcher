@@ -289,6 +289,21 @@ describe('secretFetcher.getSecretValueValue', () => {
       expect(mockFetch).toHaveBeenCalledTimes(2);
     });
 
+    test('should retry on 408 via defaultShouldRetry and succeed when the next response is OK', async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 408,
+          text: async () => 'Request Timeout',
+        })
+        .mockResolvedValueOnce(okSecretResponse());
+
+      const pending = secretFetcher.getSecretValue('test-secret', { retries: 2, baseBackoffMs: 10 });
+      await jest.runAllTimersAsync();
+      await expect(pending).resolves.toBe('plain-secret-value');
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
     test('should retry on 400 when the body indicates the extension is not ready to serve traffic', async () => {
       mockFetch
         .mockResolvedValueOnce({

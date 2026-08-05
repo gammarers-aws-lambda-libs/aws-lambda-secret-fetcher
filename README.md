@@ -120,15 +120,16 @@ Fetches a secret value from AWS Secrets Manager via the Lambda Extension.
 
 - `Error` — If `AWS_SESSION_TOKEN` is unset or blank (not running in Lambda), the response body is not a valid extension payload, or the extension HTTP port is invalid (not a number or outside 1–65535).
 - `StrictEnvValidationError` (from `strict-env-resolver` ^0.5) — If an environment variable value is invalid (e.g. non-numeric `PARAMETERS_SECRETS_EXTENSION_HTTP_PORT`).
-- `FetchRetrierHttpError` (from `fetch-retrier` ^0.3) — On non-success HTTP responses that are not retried, or after the last failed attempt on retriable statuses.
-- `FetchRetrierNetworkError` (from `fetch-retrier` ^0.3) — On network-level `fetch` failures after the last attempt.
-- `FetchRetrierAbortError` (from `fetch-retrier` ^0.3) — On per-attempt timeout after the last attempt.
+- `FetchRetrierHttpError` (from `fetch-retrier` ^0.5) — On non-success HTTP responses that are not retried, or after the last failed attempt on retriable statuses.
+- `FetchRetrierNetworkError` (from `fetch-retrier` ^0.5) — On network-level `fetch` failures after the last attempt.
+- `FetchRetrierAbortError` (from `fetch-retrier` ^0.5) — On per-attempt timeout after the last attempt.
+- `FetchRetrierInvalidOptionsError` (from `fetch-retrier` ^0.5) — If `retries`, `timeoutMs`, or `baseBackoffMs` are invalid.
 
 ## Retry behavior
 
-Retries use full jitter exponential backoff. The library retries on:
+Retries use full jitter exponential backoff (and honor `Retry-After` when present). The library retries on:
 
-- HTTP status codes: 429, 500, 502, 503, 504
+- HTTP status codes from fetch-retrier's default policy: 408, 425, 429, 500, 502, 503, 504
 - Lambda Extension not ready (400 with a body matching "not ready" and "traffic")
 - Request timeouts
 - Network errors

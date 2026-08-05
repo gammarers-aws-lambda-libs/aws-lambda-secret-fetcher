@@ -1,4 +1,5 @@
 import { fetchRetrier, type RequestOptions } from 'fetch-retrier';
+import { quietParse } from 'quiet-json-parser';
 import { StrictEnvResolver, StrictEnvType, StrictEnvValidationError } from 'strict-env-resolver';
 
 /**
@@ -41,7 +42,7 @@ interface SecretResponse {
  *
  * @param name - Secret name (identifier) to fetch
  * @param options - Optional port, timeout, retry, and backoff settings
- * @returns The secret value as string, or parsed as T if the stored value is JSON
+ * @returns The secret value as string, or parsed as T when SecretString is valid JSON
  * @throws Error if AWS_SESSION_TOKEN is unset, the extension HTTP port is invalid, or the response format is invalid
  * @throws {import('strict-env-resolver').StrictEnvValidationError} If an environment variable value is invalid
  * @throws {import('fetch-retrier').FetchRetrierHttpError} On non-retriable HTTP responses or after the last retriable attempt
@@ -80,13 +81,7 @@ const getSecretValue = async <T = string>(name: string, options: GetSecretValueO
 
   const data: SecretResponse = raw;
 
-  const secretString = data.SecretString;
-
-  if (looksLikeJson(secretString)) {
-    return JSON.parse(secretString) as T;
-  }
-
-  return secretString as T;
+  return quietParse<T>(data.SecretString, data.SecretString as T);
 };
 
 const AWS_SESSION_TOKEN_GUIDANCE =
@@ -193,16 +188,6 @@ const isSecretResponse = (value: unknown): value is SecretResponse => {
          typeof v.Name === 'string' &&
          typeof v.ARN === 'string' &&
          (v.VersionId === undefined || typeof v.VersionId === 'string');
-};
-
-/**
- * Heuristic check whether a string looks like JSON (starts with `{` after trim).
- *
- * @param str - String to check
- * @returns True if the string appears to be JSON
- */
-const looksLikeJson = (str: string): boolean => {
-  return typeof str === 'string' && str.trim().startsWith('{');
 };
 
 

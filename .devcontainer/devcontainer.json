@@ -1,22 +1,19 @@
 {
   "name": "dev-aws-lambda-secret-fetcher",
-  "image": "mcr.microsoft.com/devcontainers/base:bookworm",
+  "image": "mcr.microsoft.com/devcontainers/base:trixie",
   "features": {
     "ghcr.io/devcontainers/features/common-utils:2": {
       "username": "developer",
       "upgradePackages": true
     },
     "ghcr.io/devcontainers/features/git:1": {},
-    "ghcr.io/devcontainers/features/node:1": {
-      "version": "24"
-    },
-    "ghcr.io/devcontainers/features/dotnet:1": {},
-    "ghcr.io/devcontainers/features/python:1": {},
-    "ghcr.io/devcontainers/features/java:1": {}
+    "ghcr.io/devcontainers/features/node:2": {
+      "version": "24",
+      "npmVersion": "12"
+    }
   },
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
   "workspaceFolder": "/workspace",
-  // "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
   "mounts": [
     "target=/workspace/node_modules"
   ],
@@ -27,28 +24,4 @@
   "postCreateCommand": {
     "fixVolumePerms": "sudo chown -R $(whoami): /workspace"
   }
-  // "build": {
-  //   "dockerfile": "Dockerfile"
-  // },
-  // "remoteUser": "node",
-  // "workspaceFolder": "/workspace",
-  // "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
-  // "mounts": [
-  //   "target=/workspace/node_modules"
-  // ],
-  // "features": {
-  //   "ghcr.io/devcontainers/features/git:1": {}
-  // },
-  // "customizations": {
-  //   "vscode": {
-  //     "extensions": [
-  //       "amazonwebservices.aws-toolkit-vscode",
-  //       "ms-vscode.vscode-typescript-next"
-  //     ]
-  //   }
-  // },
-  // "postCreateCommand": {
-  //   "fixVolumePerms": "sudo chown -R $(whoami): /workspace/node_modules"
-  // }
-
 }

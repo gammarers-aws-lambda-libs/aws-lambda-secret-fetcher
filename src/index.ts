@@ -1,4 +1,5 @@
-import { fetchRetrier, type RequestOptions } from 'fetch-retrier';
+import { defaultShouldRetry, fetchRetrier, type RequestOptions } from 'fetch-retrier';
+import { quietParse } from 'quiet-json-parser';
 import { StrictEnvResolver, StrictEnvType, StrictEnvValidationError } from 'strict-env-resolver';
 
 /**
@@ -37,16 +38,17 @@ interface SecretResponse {
 /**
  * Fetches a secret value from the AWS Lambda Parameters and Secrets Extension (default localhost:2773).
  * If `extensionHttpPort` is not provided, uses `process.env.PARAMETERS_SECRETS_EXTENSION_HTTP_PORT`.
- * Uses retries with full jitter backoff for transient errors (e.g. 5xx, 429, or extension "not ready").
+ * Uses retries with full jitter backoff for transient errors (fetch-retrier defaults and extension "not ready").
  *
  * @param name - Secret name (identifier) to fetch
  * @param options - Optional port, timeout, retry, and backoff settings
- * @returns The secret value as string, or parsed as T if the stored value is JSON
+ * @returns The secret value as string, or parsed as T when SecretString is valid JSON
  * @throws Error if AWS_SESSION_TOKEN is unset, the extension HTTP port is invalid, or the response format is invalid
  * @throws {import('strict-env-resolver').StrictEnvValidationError} If an environment variable value is invalid
  * @throws {import('fetch-retrier').FetchRetrierHttpError} On non-retriable HTTP responses or after the last retriable attempt
  * @throws {import('fetch-retrier').FetchRetrierNetworkError} On network failures after the last attempt
  * @throws {import('fetch-retrier').FetchRetrierAbortError} On per-attempt timeout after the last attempt
+ * @throws {import('fetch-retrier').FetchRetrierInvalidOptionsError} If retries, timeoutMs, or baseBackoffMs are invalid
  */
 const getSecretValue = async <T = string>(name: string, options: GetSecretValueOptions = {}): Promise<T> => {
   const { extensionHttpPort, timeoutMs = 2000, retries = 3, baseBackoffMs = 300 } = options;
@@ -63,9 +65,13 @@ const getSecretValue = async <T = string>(name: string, options: GetSecretValueO
     timeoutMs,
     baseBackoffMs,
     shouldRetry: (res, body) => {
-      if ([429, 500, 502, 503, 504].includes(res.status)) return true;
+      if (defaultShouldRetry(res, body)) {
+        return true;
+      }
       // Extension may return 400 + "not ready to serve traffic" while initializing; retry in that case
-      if (res.status === 400 && /not\s+ready.*traffic/i.test(body)) return true;
+      if (res.status === 400 && /not\s+ready.*traffic/i.test(body)) {
+        return true;
+      }
       return false;
     },
   };
@@ -80,13 +86,7 @@ const getSecretValue = async <T = string>(name: string, options: GetSecretValueO
 
   const data: SecretResponse = raw;
 
-  const secretString = data.SecretString;
-
-  if (looksLikeJson(secretString)) {
-    return JSON.parse(secretString) as T;
-  }
-
-  return secretString as T;
+  return quietParse<T>(data.SecretString, data.SecretString as T);
 };
 
 const AWS_SESSION_TOKEN_GUIDANCE =
@@ -193,16 +193,6 @@ const isSecretResponse = (value: unknown): value is SecretResponse => {
          typeof v.Name === 'string' &&
          typeof v.ARN === 'string' &&
          (v.VersionId === undefined || typeof v.VersionId === 'string');
-};
-
-/**
- * Heuristic check whether a string looks like JSON (starts with `{` after trim).
- *
- * @param str - String to check
- * @returns True if the string appears to be JSON
- */
-const looksLikeJson = (str: string): boolean => {
-  return typeof str === 'string' && str.trim().startsWith('{');
 };
 
 

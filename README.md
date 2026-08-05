@@ -5,7 +5,7 @@
 
 A lightweight TypeScript library for fetching secrets from AWS Secrets Manager using the [AWS Parameters and Secrets Lambda Extension](https://docs.aws.amazon.com/secretsmanager/latest/userguide/retrieving-secrets_lambda.html). It calls the extension at `http://localhost:{port}` with retries and timeouts via [fetch-retrier](https://www.npmjs.com/package/fetch-retrier).
 
-Environment variables are validated with [strict-env-resolver](https://www.npmjs.com/package/strict-env-resolver). The extension HTTP port is resolved automatically: `extensionHttpPort` option → `PARAMETERS_SECRETS_EXTENSION_HTTP_PORT` environment variable → default `2773`.
+Environment variables are validated with [strict-env-resolver](https://www.npmjs.com/package/strict-env-resolver). Secret JSON values are parsed with [quiet-json-parser](https://www.npmjs.com/package/quiet-json-parser). The extension HTTP port is resolved automatically: `extensionHttpPort` option → `PARAMETERS_SECRETS_EXTENSION_HTTP_PORT` environment variable → default `2773`.
 
 ## Lambda execution environment only
 
@@ -22,7 +22,7 @@ It is not intended for local development, unit tests against a real extension, o
 - Optional `extensionHttpPort` override for explicit port configuration
 - Retry with timeout and full jitter backoff via [fetch-retrier](https://www.npmjs.com/package/fetch-retrier)
 - Configurable timeout, retries, and base backoff
-- Automatic JSON parsing for secret values stored as JSON strings
+- Automatic JSON parsing via [quiet-json-parser](https://www.npmjs.com/package/quiet-json-parser); invalid or empty JSON falls back to the original string
 - TypeScript support with generics
 
 ## Installation
@@ -114,21 +114,22 @@ Fetches a secret value from AWS Secrets Manager via the Lambda Extension.
 
 #### Returns
 
-- `Promise<T>` — The secret value. If the secret is a JSON string, it is automatically parsed as `T`.
+- `Promise<T>` — The secret value. Valid JSON is parsed as `T` via quiet-json-parser; otherwise the original string is returned.
 
 #### Throws
 
 - `Error` — If `AWS_SESSION_TOKEN` is unset or blank (not running in Lambda), the response body is not a valid extension payload, or the extension HTTP port is invalid (not a number or outside 1–65535).
 - `StrictEnvValidationError` (from `strict-env-resolver` ^0.5) — If an environment variable value is invalid (e.g. non-numeric `PARAMETERS_SECRETS_EXTENSION_HTTP_PORT`).
-- `FetchRetrierHttpError` (from `fetch-retrier` ^0.3) — On non-success HTTP responses that are not retried, or after the last failed attempt on retriable statuses.
-- `FetchRetrierNetworkError` (from `fetch-retrier` ^0.3) — On network-level `fetch` failures after the last attempt.
-- `FetchRetrierAbortError` (from `fetch-retrier` ^0.3) — On per-attempt timeout after the last attempt.
+- `FetchRetrierHttpError` (from `fetch-retrier` ^0.5) — On non-success HTTP responses that are not retried, or after the last failed attempt on retriable statuses.
+- `FetchRetrierNetworkError` (from `fetch-retrier` ^0.5) — On network-level `fetch` failures after the last attempt.
+- `FetchRetrierAbortError` (from `fetch-retrier` ^0.5) — On per-attempt timeout after the last attempt.
+- `FetchRetrierInvalidOptionsError` (from `fetch-retrier` ^0.5) — If `retries`, `timeoutMs`, or `baseBackoffMs` are invalid.
 
 ## Retry behavior
 
-Retries use full jitter exponential backoff. The library retries on:
+Retries use full jitter exponential backoff (and honor `Retry-After` when present). The library retries on:
 
-- HTTP status codes: 429, 500, 502, 503, 504
+- HTTP status codes from fetch-retrier's default policy: 408, 425, 429, 500, 502, 503, 504
 - Lambda Extension not ready (400 with a body matching "not ready" and "traffic")
 - Request timeouts
 - Network errors

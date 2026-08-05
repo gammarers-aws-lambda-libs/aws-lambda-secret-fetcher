@@ -31,7 +31,7 @@ describe('secretFetcher.getSecretValueValue', () => {
     }),
   });
 
-  test('should return parsed JSON when response is JSON string', async () => {
+  test('should return parsed JSON when response is JSON object string', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -43,6 +43,20 @@ describe('secretFetcher.getSecretValueValue', () => {
 
     const result = await secretFetcher.getSecretValue<{ username: string; password: string }>('test-secret');
     expect(result).toEqual({ username: 'admin', password: 'secret' });
+  });
+
+  test('should return parsed JSON when response is JSON array string', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
+        Name: 'test-secret',
+        SecretString: '["alpha","beta","gamma"]',
+      }),
+    });
+
+    const result = await secretFetcher.getSecretValue<string[]>('test-secret');
+    expect(result).toEqual(['alpha', 'beta', 'gamma']);
   });
 
   test('should return plain string when response is not JSON', async () => {
@@ -57,6 +71,34 @@ describe('secretFetcher.getSecretValueValue', () => {
 
     const result = await secretFetcher.getSecretValue('test-secret');
     expect(result).toBe('plain-secret-value');
+  });
+
+  test('should return original string when value looks like JSON but fails to parse', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
+        Name: 'test-secret',
+        SecretString: '{not-valid-json',
+      }),
+    });
+
+    const result = await secretFetcher.getSecretValue('test-secret');
+    expect(result).toBe('{not-valid-json');
+  });
+
+  test('should return parsed value when JSON parses to a primitive', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
+        Name: 'test-secret',
+        SecretString: '12345',
+      }),
+    });
+
+    const result = await secretFetcher.getSecretValue<number>('test-secret');
+    expect(result).toBe(12345);
   });
 
   test('should accept a valid response that includes VersionId', async () => {
@@ -238,6 +280,21 @@ describe('secretFetcher.getSecretValueValue', () => {
           ok: false,
           status: 503,
           text: async () => 'Service Unavailable',
+        })
+        .mockResolvedValueOnce(okSecretResponse());
+
+      const pending = secretFetcher.getSecretValue('test-secret', { retries: 2, baseBackoffMs: 10 });
+      await jest.runAllTimersAsync();
+      await expect(pending).resolves.toBe('plain-secret-value');
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    test('should retry on 408 via defaultShouldRetry and succeed when the next response is OK', async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 408,
+          text: async () => 'Request Timeout',
         })
         .mockResolvedValueOnce(okSecretResponse());
 

@@ -42,14 +42,21 @@
     "projen": "^0.101.23",
     "ts-jest": "^29.4.12",
     "ts-node": "^10.9.2",
-    "typescript": "5.9.x"
+    "typescript": "6.0.x"
   },
   "dependencies": {
-    "fetch-retrier": "^0.3.1",
+    "fetch-retrier": "^0.5.0",
+    "quiet-json-parser": "^0.1.1",
     "strict-env-resolver": "^0.5.1"
   },
   "engines": {
     "node": ">= 20.0.0"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "onFail": "ignore"
+    }
   },
   "main": "lib/index.js",
   "license": "Apache-2.0",

@@ -70,12 +70,17 @@
     },
     {
       "name": "typescript",
-      "version": "5.9.x",
+      "version": "6.0.x",
       "type": "build"
     },
     {
       "name": "fetch-retrier",
-      "version": "^0.3.1",
+      "version": "^0.5.0",
+      "type": "runtime"
+    },
+    {
+      "name": "quiet-json-parser",
+      "version": "^0.1.1",
       "type": "runtime"
     },
     {

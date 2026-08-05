@@ -13,7 +13,7 @@ const project = new typescript.TypeScriptProject({
   releaseToNpm: true,
   npmTrustedPublishing: true,
   npmAccess: javascript.NpmAccess.PUBLIC,
-  typescriptVersion: '5.9.x',
+  typescriptVersion: '6.0.x',
   minNodeVersion: '20.0.0',
   workflowNodeVersion: '24.x',
   depsUpgradeOptions: {

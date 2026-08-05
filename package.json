@@ -42,7 +42,7 @@
     "projen": "^0.101.23",
     "ts-jest": "^29.4.12",
     "ts-node": "^10.9.2",
-    "typescript": "5.9.x"
+    "typescript": "6.0.x"
   },
   "dependencies": {
     "fetch-retrier": "^0.3.1",

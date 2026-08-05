@@ -79,6 +79,11 @@
       "type": "runtime"
     },
     {
+      "name": "quiet-json-parser",
+      "version": "^0.1.1",
+      "type": "runtime"
+    },
+    {
       "name": "strict-env-resolver",
       "version": "^0.5.1",
       "type": "runtime"

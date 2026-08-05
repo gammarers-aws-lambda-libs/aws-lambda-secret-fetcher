@@ -8,6 +8,7 @@ const project = new typescript.TypeScriptProject({
   deps: [
     'fetch-retrier@^0.3.1',
     'strict-env-resolver@^0.5.1',
+    'quiet-json-parser@^0.1.1',
   ],
   releaseToNpm: true,
   npmTrustedPublishing: true,
@@ -37,4 +38,5 @@ const project = new typescript.TypeScriptProject({
     ],
   },
 });
+project.addPackageIgnore('/.devcontainer');
 project.synth();

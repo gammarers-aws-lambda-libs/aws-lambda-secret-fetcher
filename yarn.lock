@@ -4305,6 +4305,11 @@ quick-lru@^4.0.1:
   resolved "https://registry.yarnpkg.com/quick-lru/-/quick-lru-4.0.1.tgz#5b8878f113a58217848c6482026c73e1ba57727f"
   integrity sha512-ARhCpm70fzdcvNQfPoy49IaanKkTlRWF2JMzqhcJbhSFRZv7nPTvZJdcY7301IPmvW+/p0RgIWnQDLJxifsQ7g==
 
+quiet-json-parser@^0.1.1:
+  version "0.1.1"
+  resolved "https://registry.yarnpkg.com/quiet-json-parser/-/quiet-json-parser-0.1.1.tgz#12c1a575e1f4ac4549198e2ab5d98074c82208ca"
+  integrity sha512-1aXCbDs96P9talqZBH/hR49SJcmPrT+qRj4QLckJu0XHjmx++2NnYDvG/ob6Cxd3Ww3TvvdmwKkC5a8koyPwZg==
+
 "react-is-18@npm:react-is@^18.3.1":
   version "18.3.1"
   resolved "https://registry.yarnpkg.com/react-is/-/react-is-18.3.1.tgz#e83557dc12eae63a99e003a46388b1dcbb44db7e"

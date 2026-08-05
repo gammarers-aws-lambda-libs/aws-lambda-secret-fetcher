@@ -309,6 +309,7 @@
             "ts-node",
             "typescript",
             "fetch-retrier",
+            "quiet-json-parser",
             "strict-env-resolver"
           ]
         },

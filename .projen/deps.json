@@ -1,6 +1,11 @@
 {
   "dependencies": [
     {
+      "name": "@gammarers/projen-projects",
+      "version": "^0.3.1",
+      "type": "build"
+    },
+    {
       "name": "@stylistic/eslint-plugin",
       "version": "^2",
       "type": "build"
@@ -75,17 +80,17 @@
     },
     {
       "name": "fetch-retrier",
-      "version": "^0.5.0",
+      "version": "^0.6.2",
       "type": "runtime"
     },
     {
       "name": "quiet-json-parser",
-      "version": "^0.1.1",
+      "version": "^0.3.1",
       "type": "runtime"
     },
     {
       "name": "strict-env-resolver",
-      "version": "^0.5.1",
+      "version": "^0.7.1",
       "type": "runtime"
     }
   ],

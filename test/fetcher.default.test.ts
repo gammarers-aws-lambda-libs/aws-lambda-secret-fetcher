@@ -1,6 +1,12 @@
 import { FetchRetrierHttpError } from 'fetch-retrier';
 import { StrictEnvResolver, StrictEnvValidationError } from 'strict-env-resolver';
-import { secretFetcher } from '../src';
+import {
+  SecretFetcherBinaryError,
+  SecretFetcherPortError,
+  SecretFetcherResponseError,
+  SecretFetcherSessionTokenError,
+  secretFetcher,
+} from '../src';
 
 describe('secretFetcher.getSecretValueValue', () => {
   const mockFetch = jest.fn();
@@ -116,13 +122,97 @@ describe('secretFetcher.getSecretValueValue', () => {
     expect(result).toBe('with-version-id');
   });
 
+  test('should return decoded bytes when response is a binary secret', async () => {
+    const encoded = Buffer.from([0x00, 0x01, 0xff, 0x10]).toString('base64');
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
+        Name: 'test-secret',
+        SecretBinary: encoded,
+      }),
+    });
+
+    const result = await secretFetcher.getSecretValue('test-secret');
+    expect(result).toEqual(new Uint8Array([0x00, 0x01, 0xff, 0x10]));
+  });
+
+  test('should return bytes when a binary secret looks like JSON text', async () => {
+    const encoded = Buffer.from('{"a":1}', 'utf8').toString('base64');
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
+        Name: 'test-secret',
+        VersionId: 'bin-version',
+        SecretBinary: encoded,
+      }),
+    });
+
+    const result = await secretFetcher.getSecretValue('test-secret');
+    expect(result).toEqual(Uint8Array.from(Buffer.from('{"a":1}', 'utf8')));
+  });
+
+  test('should throw when both SecretString and SecretBinary are present', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
+        Name: 'test-secret',
+        SecretString: 'plain-secret-value',
+        SecretBinary: Buffer.from('hi').toString('base64'),
+      }),
+    });
+
+    await expect(secretFetcher.getSecretValue('test-secret')).rejects.toThrow(SecretFetcherResponseError);
+  });
+
+  test('should throw when SecretBinary is empty', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
+        Name: 'test-secret',
+        SecretBinary: '',
+      }),
+    });
+
+    await expect(secretFetcher.getSecretValue('test-secret')).rejects.toThrow(SecretFetcherResponseError);
+  });
+
+  test('should throw when SecretString is empty', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
+        Name: 'test-secret',
+        SecretString: '',
+      }),
+    });
+
+    await expect(secretFetcher.getSecretValue('test-secret')).rejects.toThrow(SecretFetcherResponseError);
+  });
+
+  test('should throw when SecretBinary is not standard base64', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
+        Name: 'test-secret',
+        SecretBinary: 'not-valid-base64!!!',
+      }),
+    });
+
+    await expect(secretFetcher.getSecretValue('test-secret')).rejects.toThrow(SecretFetcherBinaryError);
+  });
+
   test('should throw on invalid response format', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
       json: async () => ({ invalid: 'response' }),
     });
 
-    await expect(secretFetcher.getSecretValue('test-secret')).rejects.toThrow('Invalid secret response format');
+    await expect(secretFetcher.getSecretValue('test-secret')).rejects.toThrow(SecretFetcherResponseError);
   });
 
   test('should throw when response body is null', async () => {
@@ -131,7 +221,7 @@ describe('secretFetcher.getSecretValueValue', () => {
       json: async () => null,
     });
 
-    await expect(secretFetcher.getSecretValue('test-secret')).rejects.toThrow('Invalid secret response format');
+    await expect(secretFetcher.getSecretValue('test-secret')).rejects.toThrow(SecretFetcherResponseError);
   });
 
   test('should use extensionHttpPort from options when set', async () => {
@@ -155,18 +245,22 @@ describe('secretFetcher.getSecretValueValue', () => {
     test('should throw when AWS_SESSION_TOKEN is unset', async () => {
       delete process.env[awsSessionTokenEnv];
 
-      await expect(secretFetcher.getSecretValue('test-secret')).rejects.toThrow(
-        'AWS_SESSION_TOKEN is not set. This library only works inside an AWS Lambda execution environment',
-      );
+      const error = await secretFetcher.getSecretValue('test-secret').catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(SecretFetcherSessionTokenError);
+      expect(error).toMatchObject({
+        message: expect.stringContaining('AWS_SESSION_TOKEN is not set'),
+      });
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
     test('should throw when AWS_SESSION_TOKEN is blank', async () => {
       process.env[awsSessionTokenEnv] = '   ';
 
-      await expect(secretFetcher.getSecretValue('test-secret')).rejects.toThrow(
-        'AWS_SESSION_TOKEN is not set. This library only works inside an AWS Lambda execution environment',
-      );
+      const error = await secretFetcher.getSecretValue('test-secret').catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(SecretFetcherSessionTokenError);
+      expect(error).toMatchObject({
+        message: expect.stringContaining('AWS_SESSION_TOKEN is not set'),
+      });
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
@@ -251,16 +345,16 @@ describe('secretFetcher.getSecretValueValue', () => {
     });
 
     test('should throw when extension HTTP port is not numeric', async () => {
-      await expect(
-        secretFetcher.getSecretValue('test-secret', { extensionHttpPort: 'not-a-port' }),
-      ).rejects.toThrow('Invalid extension HTTP port: must be a number');
+      const error = await secretFetcher.getSecretValue('test-secret', { extensionHttpPort: 'not-a-port' }).catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(SecretFetcherPortError);
+      expect(error).toMatchObject({ message: 'Invalid extension HTTP port: must be a number' });
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
     test('should throw when extension HTTP port is out of range', async () => {
-      await expect(
-        secretFetcher.getSecretValue('test-secret', { extensionHttpPort: 70000 }),
-      ).rejects.toThrow('Invalid extension HTTP port: must be between 1 and 65535');
+      const error = await secretFetcher.getSecretValue('test-secret', { extensionHttpPort: 70000 }).catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(SecretFetcherPortError);
+      expect(error).toMatchObject({ message: 'Invalid extension HTTP port: must be between 1 and 65535' });
       expect(mockFetch).not.toHaveBeenCalled();
     });
   });

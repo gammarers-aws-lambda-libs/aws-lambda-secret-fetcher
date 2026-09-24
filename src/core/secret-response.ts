@@ -49,7 +49,7 @@ type SecretFieldKind = 'absent' | 'string' | 'invalid';
  * String secrets are parsed as JSON when possible. Binary secrets are decoded from standard base64.
  *
  * @param raw - JSON body from the extension
- * @returns Parsed string secret, or decoded binary bytes
+ * @returns Parsed JSON, the original string, or decoded binary bytes
  * @throws {SecretFetcherResponseError} If the body is not a string or binary secret
  * @throws {SecretFetcherBinaryError} If SecretBinary is not standard base64
  */

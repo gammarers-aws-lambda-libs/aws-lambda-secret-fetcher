@@ -18,7 +18,7 @@ A TypeScript library that fetches secrets from AWS Secrets Manager through the [
 
 ## How it works
 
-Run this library inside an AWS Lambda function that has the Parameters and Secrets Lambda Extension layer attached. `getSecretValue` reads `AWS_SESSION_TOKEN`, requests `http://localhost:{port}/secretsmanager/get`, and retries while the extension is not ready. A string secret is returned as parsed JSON or as the original string. A binary secret is returned as `Uint8Array`.
+Run this library inside an AWS Lambda function that has the Parameters and Secrets Lambda Extension layer attached. `getSecretValue` reads `AWS_SESSION_TOKEN`, requests `http://localhost:{port}/secretsmanager/get`, and retries while the extension is not ready. The payload must contain exactly one non-empty `SecretString` or `SecretBinary`. A string secret is returned as parsed JSON or as the original string. A binary secret is returned as `Uint8Array`.
 
 If `AWS_SESSION_TOKEN` is missing or blank, the call throws `SecretFetcherSessionTokenError` and does not contact the extension. Check a specific `SecretFetcher*Error` subclass before the `SecretFetcherError` base class.
 

@@ -7,7 +7,7 @@ const project = new ProjenTypeScriptProject({
     '@gammarers/projen-projects@^0.3.1',
   ],
   deps: [
-    'fetch-retrier@^0.5.0',
+    'fetch-retrier@^0.6.2',
     'strict-env-resolver@^0.5.1',
     'quiet-json-parser@^0.1.1',
   ],

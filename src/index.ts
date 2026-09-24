@@ -22,18 +22,42 @@ export interface GetSecretValueOptions {
 }
 
 /**
- * Response shape returned by the Secrets Manager Extension API.
+ * Fields shared by string and binary secret responses.
  */
-interface SecretResponse {
+interface SecretMetadata {
   /** ARN of the secret */
   ARN: string;
   /** Name of the secret */
   Name: string;
-  /** Secret value as string (may be JSON) */
-  SecretString: string;
   /** Optional version identifier */
   VersionId?: string;
 }
+
+/**
+ * Response when the secret value is a string (may be JSON).
+ */
+interface SecretStringResponse extends SecretMetadata {
+  /** Secret value as string (may be JSON) */
+  SecretString: string;
+}
+
+/**
+ * Response when the secret value is binary, base64-encoded in the extension JSON.
+ */
+interface SecretBinaryResponse extends SecretMetadata {
+  /** Base64-encoded secret bytes */
+  SecretBinary: string;
+}
+
+/**
+ * Response shape returned by the Secrets Manager Extension API.
+ * Exactly one of SecretString or SecretBinary is present.
+ */
+type SecretResponse = SecretStringResponse | SecretBinaryResponse;
+
+const STANDARD_BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+
+type SecretFieldKind = 'absent' | 'string' | 'invalid';
 
 /**
  * Fetches a secret value from the AWS Lambda Parameters and Secrets Extension (default localhost:2773).
@@ -42,15 +66,15 @@ interface SecretResponse {
  *
  * @param name - Secret name (identifier) to fetch
  * @param options - Optional port, timeout, retry, and backoff settings
- * @returns The secret value as string, or parsed as T when SecretString is valid JSON
- * @throws Error if AWS_SESSION_TOKEN is unset, the extension HTTP port is invalid, or the response format is invalid
+ * @returns For SecretString, valid JSON parsed as T, otherwise the original string. For SecretBinary, the base64 payload decoded as Uint8Array.
+ * @throws Error if AWS_SESSION_TOKEN is unset, the extension HTTP port is invalid, the response format is invalid, or SecretBinary is not standard base64
  * @throws {import('strict-env-resolver').StrictEnvValidationError} If an environment variable value is invalid
  * @throws {import('fetch-retrier').FetchRetrierHttpError} On non-retriable HTTP responses or after the last retriable attempt
  * @throws {import('fetch-retrier').FetchRetrierNetworkError} On network failures after the last attempt
  * @throws {import('fetch-retrier').FetchRetrierAbortError} On per-attempt timeout after the last attempt
  * @throws {import('fetch-retrier').FetchRetrierInvalidOptionsError} If retries, timeoutMs, or baseBackoffMs are invalid
  */
-const getSecretValue = async <T = string>(name: string, options: GetSecretValueOptions = {}): Promise<T> => {
+const getSecretValue = async <T = string>(name: string, options: GetSecretValueOptions = {}): Promise<T | Uint8Array> => {
   const { extensionHttpPort, timeoutMs = 2000, retries = 3, baseBackoffMs = 300 } = options;
 
   const port = resolveExtensionHttpPort(extensionHttpPort);
@@ -84,9 +108,11 @@ const getSecretValue = async <T = string>(name: string, options: GetSecretValueO
     throw new Error('Invalid secret response format');
   }
 
-  const data: SecretResponse = raw;
+  if ('SecretString' in raw) {
+    return quietParse<T>(raw.SecretString, raw.SecretString as T);
+  }
 
-  return quietParse<T>(data.SecretString, data.SecretString as T);
+  return decodeSecretBinary(raw.SecretBinary);
 };
 
 const AWS_SESSION_TOKEN_GUIDANCE =
@@ -180,21 +206,76 @@ const assertValidTcpPort = (port: number): string => {
 };
 
 /**
+ * Classifies a SecretString or SecretBinary field.
+ *
+ * Absent means the key is missing. Empty strings and non-strings are invalid.
+ *
+ * @param record - Extension response object
+ * @param key - Field name to classify
+ * @returns Whether the field is absent, a non-empty string, or invalid
+ */
+const secretFieldKind = (record: Record<string, unknown>, key: 'SecretString' | 'SecretBinary'): SecretFieldKind => {
+  if (!Object.prototype.hasOwnProperty.call(record, key)) {
+    return 'absent';
+  }
+
+  const field = record[key];
+  if (typeof field !== 'string' || field.length === 0) {
+    return 'invalid';
+  }
+
+  return 'string';
+};
+
+/**
  * Type guard for the Secrets Manager Extension response shape.
+ *
+ * Accepts exactly one of a non-empty SecretString or a non-empty SecretBinary.
  *
  * @param value - Value to check
  * @returns True if value has the shape of SecretResponse
  */
 const isSecretResponse = (value: unknown): value is SecretResponse => {
   if (typeof value !== 'object' || value === null) return false;
-  const v = value as Record<string, unknown>;
+  const record = value as Record<string, unknown>;
 
-  return typeof v.SecretString === 'string' &&
-         typeof v.Name === 'string' &&
-         typeof v.ARN === 'string' &&
-         (v.VersionId === undefined || typeof v.VersionId === 'string');
+  if (typeof record.Name !== 'string' || typeof record.ARN !== 'string') {
+    return false;
+  }
+  if (record.VersionId !== undefined && typeof record.VersionId !== 'string') {
+    return false;
+  }
+
+  const secretString = secretFieldKind(record, 'SecretString');
+  const secretBinary = secretFieldKind(record, 'SecretBinary');
+  const hasString = secretString === 'string' && secretBinary === 'absent';
+  const hasBinary = secretBinary === 'string' && secretString === 'absent';
+
+  return hasString || hasBinary;
 };
 
+/**
+ * Returns whether a string is canonical standard base64 with padding.
+ *
+ * @param encoded - Candidate base64 text
+ * @returns True when the text matches standard base64
+ */
+const isStandardBase64 = (encoded: string): boolean => STANDARD_BASE64.test(encoded);
+
+/**
+ * Decodes a SecretBinary base64 payload into bytes.
+ *
+ * @param encoded - Base64 text from the extension response
+ * @returns Decoded secret bytes
+ * @throws Error if the payload is not standard base64
+ */
+const decodeSecretBinary = (encoded: string): Uint8Array => {
+  if (!isStandardBase64(encoded)) {
+    throw new Error('Invalid secret binary encoding');
+  }
+
+  return Uint8Array.from(Buffer.from(encoded, 'base64'));
+};
 
 /**
  * Client for fetching secrets from the AWS Lambda Secrets Manager Extension.

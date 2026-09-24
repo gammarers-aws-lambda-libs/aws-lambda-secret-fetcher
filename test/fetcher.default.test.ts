@@ -116,6 +116,90 @@ describe('secretFetcher.getSecretValueValue', () => {
     expect(result).toBe('with-version-id');
   });
 
+  test('should return decoded bytes when response is a binary secret', async () => {
+    const encoded = Buffer.from([0x00, 0x01, 0xff, 0x10]).toString('base64');
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
+        Name: 'test-secret',
+        SecretBinary: encoded,
+      }),
+    });
+
+    const result = await secretFetcher.getSecretValue('test-secret');
+    expect(result).toEqual(new Uint8Array([0x00, 0x01, 0xff, 0x10]));
+  });
+
+  test('should return bytes when a binary secret looks like JSON text', async () => {
+    const encoded = Buffer.from('{"a":1}', 'utf8').toString('base64');
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
+        Name: 'test-secret',
+        VersionId: 'bin-version',
+        SecretBinary: encoded,
+      }),
+    });
+
+    const result = await secretFetcher.getSecretValue('test-secret');
+    expect(result).toEqual(Uint8Array.from(Buffer.from('{"a":1}', 'utf8')));
+  });
+
+  test('should throw when both SecretString and SecretBinary are present', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
+        Name: 'test-secret',
+        SecretString: 'plain-secret-value',
+        SecretBinary: Buffer.from('hi').toString('base64'),
+      }),
+    });
+
+    await expect(secretFetcher.getSecretValue('test-secret')).rejects.toThrow('Invalid secret response format');
+  });
+
+  test('should throw when SecretBinary is empty', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
+        Name: 'test-secret',
+        SecretBinary: '',
+      }),
+    });
+
+    await expect(secretFetcher.getSecretValue('test-secret')).rejects.toThrow('Invalid secret response format');
+  });
+
+  test('should throw when SecretString is empty', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
+        Name: 'test-secret',
+        SecretString: '',
+      }),
+    });
+
+    await expect(secretFetcher.getSecretValue('test-secret')).rejects.toThrow('Invalid secret response format');
+  });
+
+  test('should throw when SecretBinary is not standard base64', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
+        Name: 'test-secret',
+        SecretBinary: 'not-valid-base64!!!',
+      }),
+    });
+
+    await expect(secretFetcher.getSecretValue('test-secret')).rejects.toThrow('Invalid secret binary encoding');
+  });
+
   test('should throw on invalid response format', async () => {
     mockFetch.mockResolvedValue({
       ok: true,

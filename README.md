@@ -1,55 +1,60 @@
 # AWS Lambda Secret Fetcher
 
-[![npm version](https://img.shields.io/npm/v/aws-lambda-secret-fetcher.svg)](https://www.npmjs.com/package/aws-lambda-secret-fetcher)
-[![License](https://img.shields.io/npm/l/aws-lambda-secret-fetcher.svg)](https://www.npmjs.com/package/aws-lambda-secret-fetcher)
+[![npm version](https://img.shields.io/npm/v/aws-lambda-secret-fetcher?style=flat-square)](https://www.npmjs.com/package/aws-lambda-secret-fetcher)
+[![license](https://img.shields.io/npm/l/aws-lambda-secret-fetcher?style=flat-square)](https://www.npmjs.com/package/aws-lambda-secret-fetcher)
+[![Node.js](https://img.shields.io/node/v/aws-lambda-secret-fetcher?style=flat-square)](https://www.npmjs.com/package/aws-lambda-secret-fetcher)
+[![build](https://img.shields.io/github/actions/workflow/status/gammarers-aws-lambda-libs/aws-lambda-secret-fetcher/build.yml?label=build&style=flat-square)](https://github.com/gammarers-aws-lambda-libs/aws-lambda-secret-fetcher/actions/workflows/build.yml)
 
-A lightweight TypeScript library for fetching secrets from AWS Secrets Manager using the [AWS Parameters and Secrets Lambda Extension](https://docs.aws.amazon.com/secretsmanager/latest/userguide/retrieving-secrets_lambda.html). It calls the extension at `http://localhost:{port}` with retries and timeouts via [fetch-retrier](https://www.npmjs.com/package/fetch-retrier).
-
-Environment variables are validated with [strict-env-resolver](https://www.npmjs.com/package/strict-env-resolver). Secret JSON values are parsed with [quiet-json-parser](https://www.npmjs.com/package/quiet-json-parser). The extension HTTP port is resolved automatically: `extensionHttpPort` option → `PARAMETERS_SECRETS_EXTENSION_HTTP_PORT` environment variable → default `2773`.
-
-## Lambda execution environment only
-
-This library is designed to run **only inside an AWS Lambda execution environment** with the [AWS Parameters and Secrets Lambda Extension](https://docs.aws.amazon.com/secretsmanager/latest/userguide/retrieving-secrets_lambda.html) layer attached.
-
-It is not intended for local development, unit tests against a real extension, or other runtimes (ECS, EC2, etc.) unless those environments replicate Lambda's extension sidecar and inject `AWS_SESSION_TOKEN`. If `AWS_SESSION_TOKEN` is missing or blank, `getSecretValue` throws immediately with a clear error instead of calling the extension with an invalid token.
+A TypeScript library that fetches secrets from AWS Secrets Manager through the [AWS Parameters and Secrets Lambda Extension](https://docs.aws.amazon.com/secretsmanager/latest/userguide/retrieving-secrets_lambda.html). It calls the local extension HTTP API with retries and timeouts.
 
 ## Features
 
 - Uses the local Lambda Extension HTTP API (no AWS SDK required)
-- Typed environment variable resolution via [strict-env-resolver](https://www.npmjs.com/package/strict-env-resolver) (`AWS_SESSION_TOKEN`, `PARAMETERS_SECRETS_EXTENSION_HTTP_PORT`)
-- Fail-fast when `AWS_SESSION_TOKEN` is missing or blank, with a Lambda-specific guidance message
-- Reads the extension HTTP port from `PARAMETERS_SECRETS_EXTENSION_HTTP_PORT` when `extensionHttpPort` is omitted (default `2773`)
-- Optional `extensionHttpPort` override for explicit port configuration
-- Retry with timeout and full jitter backoff via [fetch-retrier](https://www.npmjs.com/package/fetch-retrier)
-- Configurable timeout, retries, and base backoff
-- Automatic JSON parsing via [quiet-json-parser](https://www.npmjs.com/package/quiet-json-parser); invalid or empty JSON falls back to the original string
-- TypeScript support with generics
+- Fails fast when `AWS_SESSION_TOKEN` is missing or blank
+- Resolves the extension port from `extensionHttpPort`, then `PARAMETERS_SECRETS_EXTENSION_HTTP_PORT`, then `2773`
+- Retries timeouts, network errors, and transient HTTP responses, including the extension not-ready response
+- Parses JSON string secrets and returns other strings unchanged
+- Decodes binary secrets from standard base64 into `Uint8Array`
+
+## How it works
+
+Run this library inside an AWS Lambda function that has the Parameters and Secrets Lambda Extension layer attached. `getSecretValue` reads `AWS_SESSION_TOKEN`, requests `http://localhost:{port}/secretsmanager/get`, and retries while the extension is not ready. A string secret is returned as parsed JSON or as the original string. A binary secret is returned as `Uint8Array`.
+
+If `AWS_SESSION_TOKEN` is missing or blank, the call throws `SecretFetcherSessionTokenError` and does not contact the extension. Check a specific `SecretFetcher*Error` subclass before the `SecretFetcherError` base class.
 
 ## Installation
 
-**npm**
+### npm
 
 ```bash
 npm install aws-lambda-secret-fetcher
 ```
 
-**yarn**
+### yarn
 
 ```bash
 yarn add aws-lambda-secret-fetcher
 ```
 
-## Usage
+### pnpm
 
-### Basic usage
+```bash
+pnpm add aws-lambda-secret-fetcher
+```
+
+## Usage
 
 ```typescript
 import { secretFetcher } from 'aws-lambda-secret-fetcher';
 
-// Get a plain string secret
 const apiKey = await secretFetcher.getSecretValue('my-api-key');
+```
 
-// Get a JSON secret with type inference
+Pass a type argument when the secret is JSON. Narrow `Uint8Array` before reading string-secret fields, because a binary secret uses that type.
+
+```typescript
+import { secretFetcher } from 'aws-lambda-secret-fetcher';
+
 interface DbCredentials {
   username: string;
   password: string;
@@ -57,12 +62,18 @@ interface DbCredentials {
 }
 
 const credentials = await secretFetcher.getSecretValue<DbCredentials>('my-db-credentials');
-console.log(credentials.username); // Type-safe access
+if (credentials instanceof Uint8Array) {
+  throw new Error('Expected a JSON secret');
+}
+console.log(credentials.username);
+
+const certificate = await secretFetcher.getSecretValue('my-binary-secret');
+if (certificate instanceof Uint8Array) {
+  console.log(certificate.byteLength);
+}
 ```
 
-When the extension layer sets `PARAMETERS_SECRETS_EXTENSION_HTTP_PORT` on your Lambda function (the usual case), you do not need to pass a port in code.
-
-### With options
+When the extension layer sets `PARAMETERS_SECRETS_EXTENSION_HTTP_PORT`, omit the port. Set `extensionHttpPort` only to override that variable or the default.
 
 ```typescript
 import { secretFetcher, type GetSecretValueOptions } from 'aws-lambda-secret-fetcher';
@@ -74,16 +85,8 @@ const options: GetSecretValueOptions = {
 };
 
 const secret = await secretFetcher.getSecretValue('my-secret', options);
-```
 
-### Override extension HTTP port
-
-Use `extensionHttpPort` only when you need to override the environment variable or default:
-
-```typescript
-import { secretFetcher } from 'aws-lambda-secret-fetcher';
-
-const secret = await secretFetcher.getSecretValue('my-secret', {
+const onCustomPort = await secretFetcher.getSecretValue('my-secret', {
   extensionHttpPort: 9999,
 });
 ```
@@ -97,51 +100,10 @@ const secret = await secretFetcher.getSecretValue('my-secret', {
 | `retries` | `number` | `3` | Maximum number of attempts (including the first request) |
 | `baseBackoffMs` | `number` | `300` | Base delay in milliseconds for backoff between retries |
 
-## API
-
-The package exports `secretFetcher`, an object that provides:
-
-### `secretFetcher.getSecretValue<T>(name, options?)`
-
-Fetches a secret value from AWS Secrets Manager via the Lambda Extension.
-
-#### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `name` | `string` | The name or ARN of the secret |
-| `options` | `GetSecretValueOptions` | Optional extension port, timeout, retries, and backoff |
-
-#### Returns
-
-- `Promise<T>` — The secret value. Valid JSON is parsed as `T` via quiet-json-parser; otherwise the original string is returned.
-
-#### Throws
-
-- `Error` — If `AWS_SESSION_TOKEN` is unset or blank (not running in Lambda), the response body is not a valid extension payload, or the extension HTTP port is invalid (not a number or outside 1–65535).
-- `StrictEnvValidationError` (from `strict-env-resolver` ^0.5) — If an environment variable value is invalid (e.g. non-numeric `PARAMETERS_SECRETS_EXTENSION_HTTP_PORT`).
-- `FetchRetrierHttpError` (from `fetch-retrier` ^0.5) — On non-success HTTP responses that are not retried, or after the last failed attempt on retriable statuses.
-- `FetchRetrierNetworkError` (from `fetch-retrier` ^0.5) — On network-level `fetch` failures after the last attempt.
-- `FetchRetrierAbortError` (from `fetch-retrier` ^0.5) — On per-attempt timeout after the last attempt.
-- `FetchRetrierInvalidOptionsError` (from `fetch-retrier` ^0.5) — If `retries`, `timeoutMs`, or `baseBackoffMs` are invalid.
-
-## Retry behavior
-
-Retries use full jitter exponential backoff (and honor `Retry-After` when present). The library retries on:
-
-- HTTP status codes from fetch-retrier's default policy: 408, 425, 429, 500, 502, 503, 504
-- Lambda Extension not ready (400 with a body matching "not ready" and "traffic")
-- Request timeouts
-- Network errors
-
 ## Requirements
 
 - Node.js >= 20.0.0
-- **AWS Lambda execution environment** (this library does not work outside Lambda)
-- [AWS Parameters and Secrets Lambda Extension](https://docs.aws.amazon.com/secretsmanager/latest/userguide/retrieving-secrets_lambda.html) layer attached to the function
-- `AWS_SESSION_TOKEN` provided by the Lambda runtime (required string; sent as `X-Aws-Parameters-Secrets-Token` to the extension; missing or blank values fail fast with a guidance error)
-- Optional: `PARAMETERS_SECRETS_EXTENSION_HTTP_PORT` set by the extension layer when using a non-default port (parsed as a number via strict-env-resolver; defaults to `2773` when unset)
 
 ## License
 
-This project is licensed under the Apache-2.0 License.
+This project is licensed under the (Apache-2.0) License.

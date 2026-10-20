@@ -8,7 +8,7 @@ import {
   secretFetcher,
 } from '../src';
 
-describe('secretFetcher.getSecretValueValue', () => {
+describe('secretFetcher.getSecretValue', () => {
   const mockFetch = jest.fn();
   const originalFetch = global.fetch;
   const extensionHttpPortEnv = 'PARAMETERS_SECRETS_EXTENSION_HTTP_PORT';
@@ -225,20 +225,60 @@ describe('secretFetcher.getSecretValueValue', () => {
   });
 
   test('should use extensionHttpPort from options when set', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
-        Name: 'test-secret',
-        SecretString: 'plain-secret-value',
-      }),
-    });
+    mockFetch.mockResolvedValue(okSecretResponse());
 
     await secretFetcher.getSecretValue('test-secret', { extensionHttpPort: 9999 });
     expect(mockFetch).toHaveBeenCalledWith(
       'http://localhost:9999/secretsmanager/get?secretId=test-secret',
       expect.any(Object),
     );
+  });
+
+  describe('version query parameters', () => {
+    test('should omit versionId and versionStage when unset', async () => {
+      mockFetch.mockResolvedValue(okSecretResponse());
+
+      await secretFetcher.getSecretValue('test-secret');
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:2773/secretsmanager/get?secretId=test-secret',
+        expect.any(Object),
+      );
+    });
+
+    test('should append versionId when set', async () => {
+      mockFetch.mockResolvedValue(okSecretResponse());
+
+      await secretFetcher.getSecretValue('test-secret', {
+        versionId: '01234567-89ab-cdef-0123-456789abcdef',
+      });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:2773/secretsmanager/get?secretId=test-secret&versionId=01234567-89ab-cdef-0123-456789abcdef',
+        expect.any(Object),
+      );
+    });
+
+    test('should append versionStage when set', async () => {
+      mockFetch.mockResolvedValue(okSecretResponse());
+
+      await secretFetcher.getSecretValue('test-secret', { versionStage: 'AWSPENDING' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:2773/secretsmanager/get?secretId=test-secret&versionStage=AWSPENDING',
+        expect.any(Object),
+      );
+    });
+
+    test('should append both versionId and versionStage when set', async () => {
+      mockFetch.mockResolvedValue(okSecretResponse());
+
+      await secretFetcher.getSecretValue('test-secret', {
+        versionId: '01234567-89ab-cdef-0123-456789abcdef',
+        versionStage: 'AWSCURRENT',
+      });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:2773/secretsmanager/get?secretId=test-secret&versionId=01234567-89ab-cdef-0123-456789abcdef&versionStage=AWSCURRENT',
+        expect.any(Object),
+      );
+    });
   });
 
   describe('AWS_SESSION_TOKEN validation', () => {
@@ -301,20 +341,9 @@ describe('secretFetcher.getSecretValueValue', () => {
   });
 
   describe('extension HTTP port resolution', () => {
-    const okFetch = () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
-          Name: 'test-secret',
-          SecretString: 'plain-secret-value',
-        }),
-      });
-    };
-
     test('should use PARAMETERS_SECRETS_EXTENSION_HTTP_PORT when extensionHttpPort is omitted', async () => {
       process.env[extensionHttpPortEnv] = '8080';
-      okFetch();
+      mockFetch.mockResolvedValue(okSecretResponse());
 
       await secretFetcher.getSecretValue('test-secret');
       expect(mockFetch).toHaveBeenCalledWith(
@@ -324,7 +353,7 @@ describe('secretFetcher.getSecretValueValue', () => {
     });
 
     test('should default to port 2773 when extensionHttpPort and env are unset', async () => {
-      okFetch();
+      mockFetch.mockResolvedValue(okSecretResponse());
 
       await secretFetcher.getSecretValue('test-secret');
       expect(mockFetch).toHaveBeenCalledWith(
@@ -335,7 +364,7 @@ describe('secretFetcher.getSecretValueValue', () => {
 
     test('should prefer extensionHttpPort option over PARAMETERS_SECRETS_EXTENSION_HTTP_PORT', async () => {
       process.env[extensionHttpPortEnv] = '8080';
-      okFetch();
+      mockFetch.mockResolvedValue(okSecretResponse());
 
       await secretFetcher.getSecretValue('test-secret', { extensionHttpPort: 9999 });
       expect(mockFetch).toHaveBeenCalledWith(

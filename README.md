@@ -15,6 +15,7 @@ A TypeScript library that fetches secrets from AWS Secrets Manager through the [
 - Retries timeouts, network errors, and transient HTTP responses, including the extension not-ready response
 - Parses JSON string secrets and returns other strings unchanged
 - Decodes binary secrets from standard base64 into `Uint8Array`
+- Supports `versionId` and `versionStage` for a specific secret version or staging label
 
 ## How it works
 
@@ -89,6 +90,11 @@ const secret = await secretFetcher.getSecretValue('my-secret', options);
 const onCustomPort = await secretFetcher.getSecretValue('my-secret', {
   extensionHttpPort: 9999,
 });
+
+// Fetch a staging label during rotation (AWSCURRENT, AWSPREVIOUS, AWSPENDING, or a custom label)
+const pending = await secretFetcher.getSecretValue('my-secret', {
+  versionStage: 'AWSPENDING',
+});
 ```
 
 ## Options
@@ -96,6 +102,8 @@ const onCustomPort = await secretFetcher.getSecretValue('my-secret', {
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `extensionHttpPort` | `string \| number` | `PARAMETERS_SECRETS_EXTENSION_HTTP_PORT` or `2773` | TCP port the extension listens on at `localhost`. Highest precedence when set. Must be an integer between 1 and 65535. |
+| `versionId` | `string` | _(omitted)_ | Secret version UUID (`versionId` query parameter). When omitted, the extension uses `versionStage` or AWSCURRENT. |
+| `versionStage` | `string` | _(omitted)_ | Staging label (`versionStage` query parameter), such as `AWSCURRENT`, `AWSPREVIOUS`, or `AWSPENDING`. When omitted, the extension defaults to AWSCURRENT. |
 | `timeoutMs` | `number` | `2000` | Request timeout in milliseconds per attempt |
 | `retries` | `number` | `3` | Maximum number of attempts (including the first request) |
 | `baseBackoffMs` | `number` | `300` | Base delay in milliseconds for backoff between retries |

@@ -1,11 +1,30 @@
 import { defaultShouldRetry, fetchRetrier, type RequestOptions } from 'fetch-retrier';
-import { resolveAwsSessionToken, resolveExtensionHttpPort } from './core/extension-http';
+import {
+  buildGetSecretUrl,
+  resolveAwsSessionToken,
+  resolveExtensionHttpPort,
+} from './core/extension-http';
 import { readSecretValue } from './core/secret-response';
 
 /**
  * HTTP status the extension returns while it is still starting.
  */
 const EXTENSION_NOT_READY_STATUS = 400;
+
+/**
+ * Body pattern for the extension "not ready to serve traffic" response.
+ */
+const EXTENSION_NOT_READY_BODY = /not\s+ready.*traffic/i;
+
+/** Header that carries the Lambda session token to the extension. */
+const EXTENSION_TOKEN_HEADER = 'X-Aws-Parameters-Secrets-Token';
+
+/** Default per-attempt request timeout in milliseconds. */
+const DEFAULT_TIMEOUT_MS = 2000;
+/** Default maximum number of attempts (including the first request). */
+const DEFAULT_RETRIES = 3;
+/** Default base delay in milliseconds for backoff between retries. */
+const DEFAULT_BASE_BACKOFF_MS = 300;
 
 /**
  * Options for fetching a secret from the Secrets Manager Extension.
@@ -18,6 +37,17 @@ export interface GetSecretValueOptions {
    * and falls back to `2773`.
    */
   extensionHttpPort?: string | number;
+  /**
+   * Unique identifier of the secret version to fetch (`versionId` query parameter).
+   * When omitted, the extension uses the version selected by `versionStage` or AWSCURRENT.
+   */
+  versionId?: string;
+  /**
+   * Staging label of the secret version to fetch (`versionStage` query parameter).
+   * Common values: `AWSCURRENT`, `AWSPREVIOUS`, `AWSPENDING`.
+   * When omitted, the extension defaults to AWSCURRENT.
+   */
+  versionStage?: string;
   /** Request timeout in milliseconds. Default: 2000 */
   timeoutMs?: number;
   /** Maximum number of attempts (including the first request). Default: 3 */
@@ -32,7 +62,7 @@ export interface GetSecretValueOptions {
  * Uses retries with full jitter backoff for transient errors (fetch-retrier defaults and extension "not ready").
  *
  * @param name - Secret name (identifier) to fetch
- * @param options - Optional port, timeout, retry, and backoff settings
+ * @param options - Optional port, version, timeout, retry, and backoff settings
  * @returns For SecretString, valid JSON parsed as T, otherwise the original string. For SecretBinary, the base64 payload decoded as Uint8Array.
  * @throws {import('./core/errors').SecretFetcherSessionTokenError} If `AWS_SESSION_TOKEN` is unset or blank
  * @throws {import('./core/errors').SecretFetcherPortError} If the extension HTTP port is invalid
@@ -45,15 +75,22 @@ export interface GetSecretValueOptions {
  * @throws {import('fetch-retrier').FetchRetrierInvalidOptionsError} If retries, timeoutMs, or baseBackoffMs are invalid
  */
 const getSecretValue = async <T = string>(name: string, options: GetSecretValueOptions = {}): Promise<T | Uint8Array> => {
-  const { extensionHttpPort, timeoutMs = 2000, retries = 3, baseBackoffMs = 300 } = options;
+  const {
+    extensionHttpPort,
+    versionId,
+    versionStage,
+    timeoutMs = DEFAULT_TIMEOUT_MS,
+    retries = DEFAULT_RETRIES,
+    baseBackoffMs = DEFAULT_BASE_BACKOFF_MS,
+  } = options;
 
   const port = resolveExtensionHttpPort(extensionHttpPort);
   const sessionToken = resolveAwsSessionToken();
-  const url = `http://localhost:${port}/secretsmanager/get?secretId=${encodeURIComponent(name)}`;
+  const url = buildGetSecretUrl(port, name, versionId, versionStage);
 
   const requestOptions: RequestOptions = {
     headers: {
-      'X-Aws-Parameters-Secrets-Token': sessionToken,
+      [EXTENSION_TOKEN_HEADER]: sessionToken,
     },
     retries,
     timeoutMs,
@@ -62,11 +99,9 @@ const getSecretValue = async <T = string>(name: string, options: GetSecretValueO
       if (defaultShouldRetry(res, body)) {
         return true;
       }
+
       // Extension may return 400 + "not ready to serve traffic" while initializing; retry in that case
-      if (res.status === EXTENSION_NOT_READY_STATUS && /not\s+ready.*traffic/i.test(body)) {
-        return true;
-      }
-      return false;
+      return res.status === EXTENSION_NOT_READY_STATUS && EXTENSION_NOT_READY_BODY.test(body);
     },
   };
 

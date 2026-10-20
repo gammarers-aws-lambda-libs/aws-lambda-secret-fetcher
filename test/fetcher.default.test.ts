@@ -241,6 +241,53 @@ describe('secretFetcher.getSecretValueValue', () => {
     );
   });
 
+  describe('version query parameters', () => {
+    test('should omit versionId and versionStage when unset', async () => {
+      mockFetch.mockResolvedValue(okSecretResponse());
+
+      await secretFetcher.getSecretValue('test-secret');
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:2773/secretsmanager/get?secretId=test-secret',
+        expect.any(Object),
+      );
+    });
+
+    test('should append versionId when set', async () => {
+      mockFetch.mockResolvedValue(okSecretResponse());
+
+      await secretFetcher.getSecretValue('test-secret', {
+        versionId: '01234567-89ab-cdef-0123-456789abcdef',
+      });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:2773/secretsmanager/get?secretId=test-secret&versionId=01234567-89ab-cdef-0123-456789abcdef',
+        expect.any(Object),
+      );
+    });
+
+    test('should append versionStage when set', async () => {
+      mockFetch.mockResolvedValue(okSecretResponse());
+
+      await secretFetcher.getSecretValue('test-secret', { versionStage: 'AWSPENDING' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:2773/secretsmanager/get?secretId=test-secret&versionStage=AWSPENDING',
+        expect.any(Object),
+      );
+    });
+
+    test('should append both versionId and versionStage when set', async () => {
+      mockFetch.mockResolvedValue(okSecretResponse());
+
+      await secretFetcher.getSecretValue('test-secret', {
+        versionId: '01234567-89ab-cdef-0123-456789abcdef',
+        versionStage: 'AWSCURRENT',
+      });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:2773/secretsmanager/get?secretId=test-secret&versionId=01234567-89ab-cdef-0123-456789abcdef&versionStage=AWSCURRENT',
+        expect.any(Object),
+      );
+    });
+  });
+
   describe('AWS_SESSION_TOKEN validation', () => {
     test('should throw when AWS_SESSION_TOKEN is unset', async () => {
       delete process.env[awsSessionTokenEnv];

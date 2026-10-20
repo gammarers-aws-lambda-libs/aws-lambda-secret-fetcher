@@ -18,6 +18,17 @@ export interface GetSecretValueOptions {
    * and falls back to `2773`.
    */
   extensionHttpPort?: string | number;
+  /**
+   * Unique identifier of the secret version to fetch (`versionId` query parameter).
+   * When omitted, the extension uses the version selected by `versionStage` or AWSCURRENT.
+   */
+  versionId?: string;
+  /**
+   * Staging label of the secret version to fetch (`versionStage` query parameter).
+   * Common values: `AWSCURRENT`, `AWSPREVIOUS`, `AWSPENDING`.
+   * When omitted, the extension defaults to AWSCURRENT.
+   */
+  versionStage?: string;
   /** Request timeout in milliseconds. Default: 2000 */
   timeoutMs?: number;
   /** Maximum number of attempts (including the first request). Default: 3 */
@@ -27,12 +38,31 @@ export interface GetSecretValueOptions {
 }
 
 /**
+ * Builds the local extension URL for `GET /secretsmanager/get`.
+ *
+ * @param port - Resolved extension HTTP port
+ * @param name - Secret id (`secretId` query parameter)
+ * @param versionId - Optional version UUID
+ * @param versionStage - Optional staging label (for example AWSCURRENT)
+ */
+const buildGetSecretUrl = (port: string, name: string, versionId?: string, versionStage?: string): string => {
+  const params = new URLSearchParams({ secretId: name });
+  if (versionId !== undefined) {
+    params.set('versionId', versionId);
+  }
+  if (versionStage !== undefined) {
+    params.set('versionStage', versionStage);
+  }
+  return `http://localhost:${port}/secretsmanager/get?${params.toString()}`;
+};
+
+/**
  * Fetches a secret value from the AWS Lambda Parameters and Secrets Extension (default localhost:2773).
  * If `extensionHttpPort` is not provided, uses `process.env.PARAMETERS_SECRETS_EXTENSION_HTTP_PORT`.
  * Uses retries with full jitter backoff for transient errors (fetch-retrier defaults and extension "not ready").
  *
  * @param name - Secret name (identifier) to fetch
- * @param options - Optional port, timeout, retry, and backoff settings
+ * @param options - Optional port, version, timeout, retry, and backoff settings
  * @returns For SecretString, valid JSON parsed as T, otherwise the original string. For SecretBinary, the base64 payload decoded as Uint8Array.
  * @throws {import('./core/errors').SecretFetcherSessionTokenError} If `AWS_SESSION_TOKEN` is unset or blank
  * @throws {import('./core/errors').SecretFetcherPortError} If the extension HTTP port is invalid
@@ -45,11 +75,18 @@ export interface GetSecretValueOptions {
  * @throws {import('fetch-retrier').FetchRetrierInvalidOptionsError} If retries, timeoutMs, or baseBackoffMs are invalid
  */
 const getSecretValue = async <T = string>(name: string, options: GetSecretValueOptions = {}): Promise<T | Uint8Array> => {
-  const { extensionHttpPort, timeoutMs = 2000, retries = 3, baseBackoffMs = 300 } = options;
+  const {
+    extensionHttpPort,
+    versionId,
+    versionStage,
+    timeoutMs = 2000,
+    retries = 3,
+    baseBackoffMs = 300,
+  } = options;
 
   const port = resolveExtensionHttpPort(extensionHttpPort);
   const sessionToken = resolveAwsSessionToken();
-  const url = `http://localhost:${port}/secretsmanager/get?secretId=${encodeURIComponent(name)}`;
+  const url = buildGetSecretUrl(port, name, versionId, versionStage);
 
   const requestOptions: RequestOptions = {
     headers: {

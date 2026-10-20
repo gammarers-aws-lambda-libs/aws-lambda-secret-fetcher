@@ -2,7 +2,7 @@
   "dependencies": [
     {
       "name": "@gammarers/projen-projects",
-      "version": "^0.3.1",
+      "version": "^0.5.10",
       "type": "build"
     },
     {
@@ -80,7 +80,7 @@
     },
     {
       "name": "fetch-retrier",
-      "version": "^0.6.2",
+      "version": "^0.7.1",
       "type": "runtime"
     },
     {
@@ -90,7 +90,7 @@
     },
     {
       "name": "strict-env-resolver",
-      "version": "^0.7.1",
+      "version": "^0.8.1",
       "type": "runtime"
     }
   ],

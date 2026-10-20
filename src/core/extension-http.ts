@@ -14,6 +14,40 @@ const MIN_TCP_PORT = 1;
 /** Highest valid TCP port number. */
 const MAX_TCP_PORT = 65535;
 
+/** Local extension path for Secrets Manager GetSecretValue. */
+const SECRETS_MANAGER_GET_PATH = '/secretsmanager/get';
+/** Query parameter for the secret name or ARN. */
+const SECRET_ID_QUERY = 'secretId';
+/** Query parameter for a specific secret version UUID. */
+const VERSION_ID_QUERY = 'versionId';
+/** Query parameter for a secret version staging label. */
+const VERSION_STAGE_QUERY = 'versionStage';
+
+/**
+ * Builds the local extension URL for `GET /secretsmanager/get`.
+ *
+ * @param port - Resolved extension HTTP port
+ * @param name - Secret id (`secretId` query parameter)
+ * @param versionId - Optional version UUID
+ * @param versionStage - Optional staging label (for example AWSCURRENT)
+ */
+export const buildGetSecretUrl = (
+  port: string,
+  name: string,
+  versionId?: string,
+  versionStage?: string,
+): string => {
+  const params = new URLSearchParams({ [SECRET_ID_QUERY]: name });
+  if (versionId !== undefined) {
+    params.set(VERSION_ID_QUERY, versionId);
+  }
+  if (versionStage !== undefined) {
+    params.set(VERSION_STAGE_QUERY, versionStage);
+  }
+
+  return `http://localhost:${port}${SECRETS_MANAGER_GET_PATH}?${params.toString()}`;
+};
+
 /**
  * Resolves the AWS session token required by the Parameters and Secrets Extension.
  *

@@ -1,11 +1,30 @@
 import { defaultShouldRetry, fetchRetrier, type RequestOptions } from 'fetch-retrier';
-import { resolveAwsSessionToken, resolveExtensionHttpPort } from './core/extension-http';
+import {
+  buildGetSecretUrl,
+  resolveAwsSessionToken,
+  resolveExtensionHttpPort,
+} from './core/extension-http';
 import { readSecretValue } from './core/secret-response';
 
 /**
  * HTTP status the extension returns while it is still starting.
  */
 const EXTENSION_NOT_READY_STATUS = 400;
+
+/**
+ * Body pattern for the extension "not ready to serve traffic" response.
+ */
+const EXTENSION_NOT_READY_BODY = /not\s+ready.*traffic/i;
+
+/** Header that carries the Lambda session token to the extension. */
+const EXTENSION_TOKEN_HEADER = 'X-Aws-Parameters-Secrets-Token';
+
+/** Default per-attempt request timeout in milliseconds. */
+const DEFAULT_TIMEOUT_MS = 2000;
+/** Default maximum number of attempts (including the first request). */
+const DEFAULT_RETRIES = 3;
+/** Default base delay in milliseconds for backoff between retries. */
+const DEFAULT_BASE_BACKOFF_MS = 300;
 
 /**
  * Options for fetching a secret from the Secrets Manager Extension.
@@ -38,25 +57,6 @@ export interface GetSecretValueOptions {
 }
 
 /**
- * Builds the local extension URL for `GET /secretsmanager/get`.
- *
- * @param port - Resolved extension HTTP port
- * @param name - Secret id (`secretId` query parameter)
- * @param versionId - Optional version UUID
- * @param versionStage - Optional staging label (for example AWSCURRENT)
- */
-const buildGetSecretUrl = (port: string, name: string, versionId?: string, versionStage?: string): string => {
-  const params = new URLSearchParams({ secretId: name });
-  if (versionId !== undefined) {
-    params.set('versionId', versionId);
-  }
-  if (versionStage !== undefined) {
-    params.set('versionStage', versionStage);
-  }
-  return `http://localhost:${port}/secretsmanager/get?${params.toString()}`;
-};
-
-/**
  * Fetches a secret value from the AWS Lambda Parameters and Secrets Extension (default localhost:2773).
  * If `extensionHttpPort` is not provided, uses `process.env.PARAMETERS_SECRETS_EXTENSION_HTTP_PORT`.
  * Uses retries with full jitter backoff for transient errors (fetch-retrier defaults and extension "not ready").
@@ -79,9 +79,9 @@ const getSecretValue = async <T = string>(name: string, options: GetSecretValueO
     extensionHttpPort,
     versionId,
     versionStage,
-    timeoutMs = 2000,
-    retries = 3,
-    baseBackoffMs = 300,
+    timeoutMs = DEFAULT_TIMEOUT_MS,
+    retries = DEFAULT_RETRIES,
+    baseBackoffMs = DEFAULT_BASE_BACKOFF_MS,
   } = options;
 
   const port = resolveExtensionHttpPort(extensionHttpPort);
@@ -90,7 +90,7 @@ const getSecretValue = async <T = string>(name: string, options: GetSecretValueO
 
   const requestOptions: RequestOptions = {
     headers: {
-      'X-Aws-Parameters-Secrets-Token': sessionToken,
+      [EXTENSION_TOKEN_HEADER]: sessionToken,
     },
     retries,
     timeoutMs,
@@ -99,11 +99,9 @@ const getSecretValue = async <T = string>(name: string, options: GetSecretValueO
       if (defaultShouldRetry(res, body)) {
         return true;
       }
+
       // Extension may return 400 + "not ready to serve traffic" while initializing; retry in that case
-      if (res.status === EXTENSION_NOT_READY_STATUS && /not\s+ready.*traffic/i.test(body)) {
-        return true;
-      }
-      return false;
+      return res.status === EXTENSION_NOT_READY_STATUS && EXTENSION_NOT_READY_BODY.test(body);
     },
   };
 

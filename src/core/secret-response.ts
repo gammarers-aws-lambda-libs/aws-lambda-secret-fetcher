@@ -96,12 +96,16 @@ const secretFieldKind = (record: Record<string, unknown>, key: 'SecretString' | 
  * @returns True if value has the shape of SecretResponse
  */
 const isSecretResponse = (value: unknown): value is SecretResponse => {
-  if (typeof value !== 'object' || value === null) return false;
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+
   const record = value as Record<string, unknown>;
 
   if (typeof record.Name !== 'string' || typeof record.ARN !== 'string') {
     return false;
   }
+
   if (record.VersionId !== undefined && typeof record.VersionId !== 'string') {
     return false;
   }

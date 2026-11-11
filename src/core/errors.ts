@@ -44,7 +44,7 @@ export class SecretFetcherPortError extends SecretFetcherError {
 }
 
 /**
- * Thrown when the extension payload is not a string or binary secret.
+ * Thrown when the extension payload is not a string, parsed JSON, or binary secret.
  */
 export class SecretFetcherResponseError extends SecretFetcherError {
   override readonly name: string = 'SecretFetcherResponseError';

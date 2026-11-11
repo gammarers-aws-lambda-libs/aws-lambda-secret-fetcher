@@ -63,7 +63,9 @@ export interface GetSecretValueOptions {
  *
  * @param name - Secret name (identifier) to fetch
  * @param options - Optional port, version, timeout, retry, and backoff settings
- * @returns For SecretString, valid JSON parsed as T, otherwise the original string. For SecretBinary, the base64 payload decoded as Uint8Array.
+ * @returns For a string SecretString, valid JSON parsed as T, otherwise the original string.
+ * For SecretString that is already an array, object, number, or boolean, that value.
+ * For SecretBinary, the base64 payload decoded as Uint8Array.
  * @throws {import('./core/errors').SecretFetcherSessionTokenError} If `AWS_SESSION_TOKEN` is unset or blank
  * @throws {import('./core/errors').SecretFetcherPortError} If the extension HTTP port is invalid
  * @throws {import('./core/errors').SecretFetcherResponseError} If the response format is invalid

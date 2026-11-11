@@ -65,6 +65,125 @@ describe('secretFetcher.getSecretValue', () => {
     expect(result).toEqual(['alpha', 'beta', 'gamma']);
   });
 
+  test('should return a parsed JSON array from SecretString', async () => {
+    const apiKeys = [{ name: 'ops', key: 'xxxx=' }];
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
+        Name: 'test-secret',
+        SecretString: apiKeys,
+      }),
+    });
+
+    const result = await secretFetcher.getSecretValue<Array<{ name: string; key: string }>>('test-secret');
+    expect(result).toEqual(apiKeys);
+  });
+
+  test('should return a parsed JSON object from SecretString', async () => {
+    const credentials = { username: 'admin', password: 'secret' };
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
+        Name: 'test-secret',
+        SecretString: credentials,
+      }),
+    });
+
+    const result = await secretFetcher.getSecretValue<typeof credentials>('test-secret');
+    expect(result).toEqual(credentials);
+  });
+
+  test('should return a parsed number from SecretString', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
+        Name: 'test-secret',
+        SecretString: 12345,
+      }),
+    });
+
+    const result = await secretFetcher.getSecretValue<number>('test-secret');
+    expect(result).toBe(12345);
+  });
+
+  test('should return zero when SecretString is the number zero', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
+        Name: 'test-secret',
+        SecretString: 0,
+      }),
+    });
+
+    const result = await secretFetcher.getSecretValue<number>('test-secret');
+    expect(result).toBe(0);
+  });
+
+  test('should return a parsed boolean from SecretString', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
+        Name: 'test-secret',
+        SecretString: true,
+      }),
+    });
+
+    const result = await secretFetcher.getSecretValue<boolean>('test-secret');
+    expect(result).toBe(true);
+  });
+
+  test('should return false when SecretString is the boolean false', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
+        Name: 'test-secret',
+        SecretString: false,
+      }),
+    });
+
+    const result = await secretFetcher.getSecretValue<boolean>('test-secret');
+    expect(result).toBe(false);
+  });
+
+  test('should return an empty array when SecretString is an empty array', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
+        Name: 'test-secret',
+        SecretString: [],
+      }),
+    });
+
+    const result = await secretFetcher.getSecretValue<unknown[]>('test-secret');
+    expect(result).toEqual([]);
+  });
+
+  test('should return a PEM private key string unchanged', async () => {
+    const pem = [
+      '-----BEGIN PRIVATE KEY-----',
+      'XXX',
+      '-----END PRIVATE KEY-----',
+    ].join('\n');
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
+        Name: 'test-secret',
+        SecretString: pem,
+      }),
+    });
+
+    const result = await secretFetcher.getSecretValue('test-secret');
+    expect(result).toBe(pem);
+  });
+
   test('should return plain string when response is not JSON', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
@@ -105,6 +224,20 @@ describe('secretFetcher.getSecretValue', () => {
 
     const result = await secretFetcher.getSecretValue<number>('test-secret');
     expect(result).toBe(12345);
+  });
+
+  test('should throw when VersionId is not a string', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
+        Name: 'test-secret',
+        VersionId: 1,
+        SecretString: 'with-version-id',
+      }),
+    });
+
+    await expect(secretFetcher.getSecretValue('test-secret')).rejects.toThrow(SecretFetcherResponseError);
   });
 
   test('should accept a valid response that includes VersionId', async () => {
@@ -161,6 +294,121 @@ describe('secretFetcher.getSecretValue', () => {
         Name: 'test-secret',
         SecretString: 'plain-secret-value',
         SecretBinary: Buffer.from('hi').toString('base64'),
+      }),
+    });
+
+    await expect(secretFetcher.getSecretValue('test-secret')).rejects.toThrow(SecretFetcherResponseError);
+  });
+
+  test('should read SecretString when SecretBinary is null', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
+        Name: 'test-secret',
+        SecretString: 'plain-secret-value',
+        SecretBinary: null,
+      }),
+    });
+
+    const result = await secretFetcher.getSecretValue('test-secret');
+    expect(result).toBe('plain-secret-value');
+  });
+
+  test('should read a parsed array when SecretBinary is null', async () => {
+    const apiKeys = [{ name: 'ops', key: 'xxxx=' }];
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
+        Name: 'test-secret',
+        SecretString: apiKeys,
+        SecretBinary: null,
+      }),
+    });
+
+    const result = await secretFetcher.getSecretValue<Array<{ name: string; key: string }>>('test-secret');
+    expect(result).toEqual(apiKeys);
+  });
+
+  test('should read SecretBinary when SecretString is null', async () => {
+    const encoded = Buffer.from([0x00, 0x01, 0xff, 0x10]).toString('base64');
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
+        Name: 'test-secret',
+        SecretString: null,
+        SecretBinary: encoded,
+      }),
+    });
+
+    const result = await secretFetcher.getSecretValue('test-secret');
+    expect(result).toEqual(new Uint8Array([0x00, 0x01, 0xff, 0x10]));
+  });
+
+  test('should throw when both SecretString and SecretBinary are null', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
+        Name: 'test-secret',
+        SecretString: null,
+        SecretBinary: null,
+      }),
+    });
+
+    await expect(secretFetcher.getSecretValue('test-secret')).rejects.toThrow(SecretFetcherResponseError);
+  });
+
+  test('should throw when SecretString is empty and SecretBinary is null', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
+        Name: 'test-secret',
+        SecretString: '',
+        SecretBinary: null,
+      }),
+    });
+
+    await expect(secretFetcher.getSecretValue('test-secret')).rejects.toThrow(SecretFetcherResponseError);
+  });
+
+  test('should throw when SecretBinary is empty and SecretString is null', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
+        Name: 'test-secret',
+        SecretString: null,
+        SecretBinary: '',
+      }),
+    });
+
+    await expect(secretFetcher.getSecretValue('test-secret')).rejects.toThrow(SecretFetcherResponseError);
+  });
+
+  test('should throw when SecretString is not a JSON value', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
+        Name: 'test-secret',
+        SecretString: undefined,
+      }),
+    });
+
+    await expect(secretFetcher.getSecretValue('test-secret')).rejects.toThrow(SecretFetcherResponseError);
+  });
+
+  test('should throw when SecretBinary is not a string', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test',
+        Name: 'test-secret',
+        SecretBinary: 1,
       }),
     });
 

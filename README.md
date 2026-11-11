@@ -13,13 +13,15 @@ A TypeScript library that fetches secrets from AWS Secrets Manager through the [
 - Fails fast when `AWS_SESSION_TOKEN` is missing or blank
 - Resolves the extension port from `extensionHttpPort`, then `PARAMETERS_SECRETS_EXTENSION_HTTP_PORT`, then `2773`
 - Retries timeouts, network errors, and transient HTTP responses, including the extension not-ready response
-- Parses JSON string secrets and returns other strings unchanged
+- Parses JSON string secrets and returns other strings unchanged, including PEM text
+- Returns arrays, objects, numbers, and booleans that the extension already placed in `SecretString`
+- Treats a null `SecretString` or `SecretBinary` as an omitted field
 - Decodes binary secrets from standard base64 into `Uint8Array`
 - Supports `versionId` and `versionStage` for a specific secret version or staging label
 
 ## How it works
 
-Run this library inside an AWS Lambda function that has the Parameters and Secrets Lambda Extension layer attached. `getSecretValue` reads `AWS_SESSION_TOKEN`, requests `http://localhost:{port}/secretsmanager/get`, and retries while the extension is not ready. The payload must contain exactly one non-empty `SecretString` or `SecretBinary`. A string secret is returned as parsed JSON or as the original string. A binary secret is returned as `Uint8Array`.
+Run this library inside an AWS Lambda function that has the Parameters and Secrets Lambda Extension layer attached. `getSecretValue` reads `AWS_SESSION_TOKEN`, requests `http://localhost:{port}/secretsmanager/get`, and retries while the extension is not ready. The payload must contain exactly one secret value. `SecretString` may be a non-empty string, or an array, object, number, or boolean that the extension already parsed. `SecretBinary` may be a non-empty standard base64 string. The unused field may be omitted or null. A string is returned as parsed JSON when the text is JSON, and as the original string otherwise. An already parsed value is returned as-is. A binary secret is returned as `Uint8Array`.
 
 If `AWS_SESSION_TOKEN` is missing or blank, the call throws `SecretFetcherSessionTokenError` and does not contact the extension. Check a specific `SecretFetcher*Error` subclass before the `SecretFetcherError` base class.
 

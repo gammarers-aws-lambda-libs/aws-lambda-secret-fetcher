@@ -30,6 +30,7 @@ const VERSION_STAGE_QUERY = 'versionStage';
  * @param name - Secret id (`secretId` query parameter)
  * @param versionId - Optional version UUID
  * @param versionStage - Optional staging label (for example AWSCURRENT)
+ * @returns Local extension URL for GetSecretValue
  */
 export const buildGetSecretUrl = (
   port: string,

@@ -13,7 +13,7 @@ const project = new ProjenTypeScriptProject({
     'fetcher',
   ],
   devDeps: [
-    '@gammarers/projen-projects@^0.5.10',
+    '@gammarers/projen-projects@^0.8.0',
   ],
   deps: [
     'fetch-retrier@^0.7.1',

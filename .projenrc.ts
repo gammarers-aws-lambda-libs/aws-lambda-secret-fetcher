@@ -18,7 +18,7 @@ const project = new ProjenTypeScriptProject({
   deps: [
     'fetch-retrier@^0.7.1',
     'strict-env-resolver@^0.9.0',
-    'quiet-json-parser@^0.3.1',
+    'quiet-json-parser@^0.4.3',
   ],
   releaseToNpm: true,
   npmTrustedPublishing: true,
